@@ -1,10 +1,9 @@
 package de.hub.emfcompress
 
-import difflib.DiffUtils
-import java.util.List
 import org.eclipse.emf.ecore.EAttribute
 import org.eclipse.emf.ecore.EObject
 import org.eclipse.emf.ecore.EcoreFactory
+import org.eclipse.emf.ecore.util.EcoreUtil
 import org.junit.Test
 
 import static org.junit.Assert.*
@@ -23,48 +22,52 @@ class BasicTests {
 		return container
 	}
 	
-	private def <T extends EObject> void assertEmfEquals(List<T> one, List<T> two) {
-		assertTrue(DiffUtils.diff(one, two, new EmfContainmentEqualizer<T>).deltas.size == 0)
+	private def <T> void assertEmfEquals(EObject one, EObject two) {
+		assertTrue(EcoreUtil.equals(one, two))
+	}
+	
+	def performListTest(String[] originalNames, String[] revisedNames) {
+		val original = createClass("aClass", originalNames.map[createAttribute])
+		val revised = createClass("aClass", revisedNames.map[createAttribute])
+		val revisedCopy = EcoreUtil.copy(revised)
+		
+		val patch = EmfCompressCompare.compare(original, revised, new EmfContainmentEqualizer)
+		assertEmfEquals(revisedCopy, patch.apply(original))
 	}
 	
 	@Test
 	def removeStartTest() {
-		val original = createClass("aClass", #["a", "b", "c"].map[createAttribute])
-		val revised = createClass("aClass", #["b", "c"].map[createAttribute])
-		
-		val patch = EmfCompressCompare.compare(original.EAttributes, revised.EAttributes, new EmfContainmentEqualizer)
-		assertSame(1, patch.size)
-		assertEmfEquals(revised.EAttributes, patch.apply(original.EAttributes).toList)
+		performListTest(#["a", "b", "c"], #["b", "c"])
 	}
 	
 	@Test
 	def removeMiddleTest() {
-		val original = createClass("aClass", #["a", "b", "c"].map[createAttribute])
-		val revised = createClass("aClass", #["a", "c"].map[createAttribute])
-		
-		val patch = EmfCompressCompare.compare(original.EAttributes, revised.EAttributes, new EmfContainmentEqualizer)
-		assertSame(1, patch.size)
-		assertEmfEquals(revised.EAttributes, patch.apply(original.EAttributes).toList)
+		performListTest(#["a", "b", "c"], #["a", "c"])
 	}
 	
 	@Test
 	def removeEndTest() {
-		val original = createClass("aClass", #["a", "b", "c"].map[createAttribute])
-		val revised = createClass("aClass", #["a", "b"].map[createAttribute])
-		
-		val patch = EmfCompressCompare.compare(original.EAttributes, revised.EAttributes, new EmfContainmentEqualizer)
-		assertSame(1, patch.size)
-		assertEmfEquals(revised.EAttributes, patch.apply(original.EAttributes).toList)
+		performListTest(#["a", "b", "c"], #["a", "b"])
 	}
 	
 	@Test
-	def basicTest() {
-		val original = createClass("aClass", #["a", "b", "c"].map[createAttribute])
-		val revised = createClass("aClass", #["b", "d", "c", "e"].map[createAttribute])
-		
-		val patch = EmfCompressCompare.compare(original.EAttributes, revised.EAttributes, new EmfContainmentEqualizer)
-		assertSame(3, patch.size)
-		assertEmfEquals(revised.EAttributes, patch.apply(original.EAttributes).toList)
+	def addStartTest() {
+		performListTest(#["b", "c"], #["a", "b", "c"])
+	}
+	
+	@Test
+	def addMiddleTest() {
+		performListTest(#["a", "c"], #["a", "b", "c"])
+	}
+	
+	@Test
+	def addEndTest() {
+		performListTest(#["a", "b"], #["a", "b", "c"])
+	}
+	
+	@Test
+	def mixedTest() {
+		performListTest(#["a", "b", "c"], #["e", "b", "c"])
 	}
 	
 	
