@@ -1,14 +1,23 @@
 Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
-Bundle-Name: Emfcompress
-Bundle-SymbolicName: de.hub.emfcompress
+Bundle-Name: %pluginName
+Bundle-SymbolicName: de.hub.emfcompress;singleton:=true
 Bundle-Version: 1.0.0.qualifier
 Bundle-RequiredExecutionEnvironment: JavaSE-1.8
-Bundle-ClassPath: lib/jars/diffutils-1.3.0.jar,.
+Export-Package: de.hub.emfcompress,
+ de.hub.emfcompress.impl,
+ de.hub.emfcompress.util
+Bundle-ClassPath: lib/jars/diffutils-1.3.0.jar,
+ .
+Bundle-Vendor: %providerName
+Bundle-Localization: plugin
 Require-Bundle: com.google.guava,
  org.eclipse.xtext.xbase.lib,
  org.eclipse.xtend.lib,
  org.eclipse.xtend.lib.macro,
  org.eclipse.gmt.modisco.java.discoverer;bundle-version="0.13.0",
- org.junit;bundle-version="4.12.0"
+ org.junit;bundle-version="4.12.0",
+ org.eclipse.core.runtime,
+ org.eclipse.emf.ecore;visibility:=reexport
+Bundle-ActivationPolicy: lazy
 

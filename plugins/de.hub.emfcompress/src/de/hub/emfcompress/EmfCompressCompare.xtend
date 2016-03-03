@@ -8,14 +8,17 @@ import org.eclipse.emf.ecore.EAttribute
 import org.eclipse.emf.ecore.EObject
 import org.eclipse.emf.ecore.EReference
 import org.eclipse.emf.ecore.EStructuralFeature
+import org.eclipse.emf.ecore.util.EcoreUtil
 import org.eclipse.emf.ecore.util.EcoreUtil.EqualityHelper
 
 import static difflib.DiffUtils.*
-import org.eclipse.emf.ecore.util.EcoreUtil
 
 class EmfCompressCompare {	
 	
-	static val Equalizer<Object> valueEqualizer = new Equalizer<Object> {		
+	val EmfCompressFactory factory
+	val Equalizer<EObject> objectEqualizer
+	
+	val Equalizer<Object> valueEqualizer = new Equalizer<Object> {		
 		override equals(Object original, Object revised) {
 			return if (original == null) {
 				revised == original
@@ -25,17 +28,30 @@ class EmfCompressCompare {
 		}
 	}
 	
-	public static def EmfObjectPatch compare(EObject original, EObject revised, Equalizer<EObject> objectEqualizer) {
-		val result = new EmfObjectPatch
+	new(EmfCompressFactory factory, Equalizer<EObject> objectEqualizer) {
+		this.objectEqualizer = objectEqualizer
+		this.factory = factory
+	}
+	
+	public def ObjectPatch compare(EObject original, EObject revised) {
+		val result = factory.createObjectPatch
 		for(feature:original.eClass.EAllStructuralFeatures) {
 			if (!feature.derived) {
 				if (feature.many) {
 					val patch = if (feature instanceof EAttribute) {
-						compare(feature, original.eGet(feature) as List<Object>, revised.eGet(feature) as List<Object>, valueEqualizer)					
+						compareValues(original, revised, feature, valueEqualizer) [
+							val delta = factory.createValueDelta
+							delta.values += it
+							return delta
+						]					
 					} else {
-						compare(feature, original.eGet(feature) as List<EObject>, revised.eGet(feature) as List<EObject>, objectEqualizer)
+						compareValues(original, revised, feature, objectEqualizer) [
+							val delta = factory.createObjectDelta
+							delta.objects += it
+							return delta
+						]
 					}
-					if (patch.size != 0) {
+					if (patch.deltas.size != 0) {
 						result.settingPatches += patch
 					}
 				} else {
@@ -47,7 +63,16 @@ class EmfCompressCompare {
 						!originalValue.equals(revisedValue)
 					}
 					if (changed) {
-						result.settingPatches += new EmfValuePatch(feature, revisedValue)
+						val patch = if (feature instanceof EReference) {
+							val patch = factory.createObjectValuePatch
+							patch.object = revisedValue as EObject
+							patch							
+						} else {
+							val patch = factory.createDataValuePatch
+							patch.value = revisedValue
+							patch
+						}
+						result.settingPatches += patch
 					}
 				}
 			}
@@ -55,90 +80,29 @@ class EmfCompressCompare {
 		return result
 	}
 
-	public static def <T> EmfListPatch compare(EStructuralFeature feature, List<T> original, List<T> revised, Equalizer<T> equalizer) {	
-		val diffUtilsPatch = diff(original, revised, equalizer)
-		
-		return new EmfListPatch(feature, diffUtilsPatch.deltas.map[
-			new EmfDelta(it.original.position, it.original.position + it.original.size, it.revised.lines as Iterable<Object>)
-		])
+	public def <T> ListPatch compareValues(EObject original, EObject revised, EStructuralFeature feature, Equalizer<T> equalizer, (Iterable<T>)=> Delta createDelta) {	
+		val diffUtilsPatch = diff(original.eGet(feature) as List<T>, revised.eGet(feature) as List<T>, equalizer)
+		val result = factory.createListPatch
+		result.featureID = original.eClass.getFeatureID(feature)
+		result.deltas += diffUtilsPatch.deltas.map[
+			val delta = createDelta.apply(it.revised.lines)
+			delta.start = it.original.position
+			delta.end = it.original.position + it.original.size
+			return delta
+		]
+		return result
 	}
-}
-
-class EmfObjectPatch {
-	public val List<EmfSettingPatch> settingPatches = newArrayList
 	
-	def EObject apply(EObject original) {		
+	public def apply(extension ObjectPatch patch, EObject original) {
 		val revised = EcoreUtil.copy(original)
-		val patchedFeatures = newHashSet
 		for (settingPatch:settingPatches) {
-			settingPatch.apply(original, revised)
-			patchedFeatures += settingPatch.feature
+			settingPatch.applySettingsPatch(original, revised)
 		}
 		return revised
 	}
-}
-
-abstract class EmfSettingPatch {
-	public val EStructuralFeature feature
-	new(EStructuralFeature feature) {
-		if (feature == null) {
-			println("##")
-		}	
-		this.feature = feature
-	}
-	public abstract def void apply(EObject original, EObject revised);
-}
-
-class EmfDelta {
-	public val int first
-	public val int last
-	public val List<Object> newContent
 	
-	new(int first, int last, Iterable<Object> newContent) {
-		this.first = first
-		this.last = last
-		this.newContent = newContent.toList
-	}
-}
-
-class EmfValuePatch extends EmfSettingPatch {
-	Object value
-	new(EStructuralFeature feature, Object value) {
-		super(feature)
-		this.value = value
-	}
-
-	override apply(EObject original, EObject revised) {
-		revised.eSet(feature, original.eGet(feature))
-	}
-}
-
-class EmfListPatch extends EmfSettingPatch {
-	val List<EmfDelta> deltas
-	
-	new(EStructuralFeature feature, Iterable<EmfDelta> deltas) {
-		super(feature)
-		this.deltas = newArrayList(deltas)
-	}
-	
-	static def <T> Iterator<T> sub(List<T> data, int start, int end) {
-		return new AbstractIterator<T> {
-			var index = start			
-			override protected computeNext() {
-				if (index < end) {
-					return data.get(index++)
-				} else {
-					return endOfData
-				}
-			}
-		}
-	}
-	
-	/**
-	 * @returns an Iterable t(a view on the given original list) that represents
-	 * the patched original lists, i.e. iterates through the values of the revised list.
-	 */
-	override apply(EObject original, EObject revised) {
+	private dispatch def void applySettingsPatch(extension ListPatch patch, EObject original, EObject revised) {
+		val feature = original.eClass.getEStructuralFeature(featureID)
 		val (Object)=>Object copy = [
 			if (feature instanceof EReference) {
 				if (feature.containment) {
@@ -154,21 +118,43 @@ class EmfListPatch extends EmfSettingPatch {
 		result.clear
 		var index = 0
 		for(delta:deltas) {
-			result += originalValues.sub(index, delta.first).toIterable.map(copy)
-			index = delta.last
-			result += delta.newContent
+			result += originalValues.sub(index, delta.start).toIterable.map(copy)
+			index = delta.end
+			result += if (delta instanceof ObjectDelta) {
+				delta.objects				
+			} else {
+				(delta as ValueDelta).values
+			}
 		}
-		result += originalValues.sub(index, originalValues.size).toIterable.map(copy)		
+		result += originalValues.sub(index, originalValues.size).toIterable.map(copy)	
 	}
 	
-	def size() {
-		return deltas.size
+	private dispatch def void applySettingsPatch(extension ValuePatch patch, EObject original, EObject revised) {
+		val feature = original.eClass.getEStructuralFeature(featureID)
+		revised.eSet(feature, if (patch instanceof ObjectValuePatch) { 
+			patch.object
+		} else { 
+			(patch as DataValuePatch).value
+		})
+	}
+	
+	private static def <T> Iterator<T> sub(List<T> data, int start, int end) {
+		return new AbstractIterator<T> {
+			var index = start			
+			override protected computeNext() {
+				if (index < end) {
+					return data.get(index++)
+				} else {
+					return endOfData
+				}
+			}
+		}
 	}
 }
 
 /**
  * A special Equalizer that recursively compares too object by traversing their containment hierarchy. It only
- * uses attributes and containment references to establish if they are equal or not.
+ * uses attributes and containment references to establish if objects are equal or not.
  */
 class EmfContainmentEqualizer<T extends EObject> extends EmfDefaultEqualizer<T> {
 	new() {

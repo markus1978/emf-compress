@@ -7,8 +7,17 @@ import org.eclipse.emf.ecore.util.EcoreUtil
 import org.junit.Test
 
 import static org.junit.Assert.*
+import org.junit.Before
 
 class BasicTests {
+	
+	var extension EmfCompressCompare compare = null
+	
+	@Before
+	public def void init() {
+		compare = new EmfCompressCompare(EmfCompressFactory.eINSTANCE, new EmfContainmentEqualizer)
+	}
+	
 	private def createAttribute(String name) {
 		val content = EcoreFactory.eINSTANCE.createEAttribute
 		content.name = name
@@ -31,7 +40,7 @@ class BasicTests {
 		val revised = createClass("aClass", revisedNames.map[createAttribute])
 		val revisedCopy = EcoreUtil.copy(revised)
 		
-		val patch = EmfCompressCompare.compare(original, revised, new EmfContainmentEqualizer)
+		val patch = compare(original, revised)
 		assertEmfEquals(revisedCopy, patch.apply(original))
 	}
 	

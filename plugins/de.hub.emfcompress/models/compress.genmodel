@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<genmodel:GenModel xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore"
+    xmlns:genmodel="http://www.eclipse.org/emf/2002/GenModel" modelDirectory="/de.hub.emfcompress/src-gen" modelPluginID="de.hub.emfcompress"
+    modelName="Compress" rootExtendsClass="org.eclipse.emf.ecore.impl.MinimalEObjectImpl$Container"
+    importerID="org.eclipse.emf.importer.ecore" complianceLevel="8.0" copyrightFields="false"
+    usedGenPackages="../../org.eclipse.emf.ecore/model/Ecore.genmodel#//ecore" operationReflection="true"
+    importOrganizing="true">
+  <foreignModel>compress.ecore</foreignModel>
+  <genPackages prefix="EmfCompress" basePackage="de.hub" disposableProviderFactory="true"
+      ecorePackage="compress.ecore#/">
+    <genClasses ecoreClass="compress.ecore#//ObjectPatch">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference compress.ecore#//ObjectPatch/settingPatches"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference compress.ecore#//ObjectPatch/original"/>
+    </genClasses>
+    <genClasses ecoreClass="compress.ecore#//Delta">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compress.ecore#//Delta/start"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compress.ecore#//Delta/end"/>
+    </genClasses>
+    <genClasses ecoreClass="compress.ecore#//SettingsPatch">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compress.ecore#//SettingsPatch/featureID"/>
+    </genClasses>
+    <genClasses ecoreClass="compress.ecore#//ListPatch">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference compress.ecore#//ListPatch/deltas"/>
+    </genClasses>
+    <genClasses ecoreClass="compress.ecore#//ValuePatch"/>
+    <genClasses ecoreClass="compress.ecore#//DataValuePatch">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compress.ecore#//DataValuePatch/value"/>
+    </genClasses>
+    <genClasses ecoreClass="compress.ecore#//ObjectDelta">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference compress.ecore#//ObjectDelta/objects"/>
+    </genClasses>
+    <genClasses ecoreClass="compress.ecore#//ValueDelta">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compress.ecore#//ValueDelta/values"/>
+    </genClasses>
+    <genClasses ecoreClass="compress.ecore#//ObjectValuePatch">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference compress.ecore#//ObjectValuePatch/value"/>
+    </genClasses>
+  </genPackages>
+</genmodel:GenModel>
