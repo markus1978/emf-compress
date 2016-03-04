@@ -8,7 +8,8 @@ Export-Package: de.hub.emfcompress,
  de.hub.emfcompress.impl,
  de.hub.emfcompress.util
 Bundle-ClassPath: lib/jars/diffutils-1.3.0.jar,
- .
+ .,
+ lib/jars/commons-io-2.4.jar
 Bundle-Vendor: %providerName
 Bundle-Localization: plugin
 Require-Bundle: com.google.guava,

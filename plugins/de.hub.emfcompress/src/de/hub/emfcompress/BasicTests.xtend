@@ -1,5 +1,7 @@
 package de.hub.emfcompress
 
+import java.io.File
+import org.apache.commons.io.FileUtils
 import org.eclipse.emf.ecore.EAttribute
 import org.eclipse.emf.ecore.EObject
 import org.eclipse.emf.ecore.EcoreFactory
@@ -7,16 +9,8 @@ import org.eclipse.emf.ecore.util.EcoreUtil
 import org.junit.Test
 
 import static org.junit.Assert.*
-import org.junit.Before
 
 class BasicTests {
-	
-	var extension EmfCompressCompare compare = null
-	
-	@Before
-	public def void init() {
-		compare = new EmfCompressCompare(EmfCompressFactory.eINSTANCE, new EmfContainmentEqualizer)
-	}
 	
 	private def createAttribute(String name) {
 		val content = EcoreFactory.eINSTANCE.createEAttribute
@@ -31,17 +25,25 @@ class BasicTests {
 		return container
 	}
 	
-	private def <T> void assertEmfEquals(EObject one, EObject two) {
-		assertTrue(EcoreUtil.equals(one, two))
+	private def assertEmfEquals(EObject result, EObject goal) {	
+		try {	
+ 			assertTrue(EcoreUtil.equals(goal, result))	
+ 		} catch (Throwable e) {
+ 			FileUtils.write(new File("testdata/goal.txt"), '''GOAL\n«EMFPrettyPrint.prettyPrint(goal)»''')
+ 			FileUtils.write(new File("testdata/result.txt"), '''RESULT\n«EMFPrettyPrint.prettyPrint(result)»''')
+ 			throw e
+ 		}
 	}
 	
-	def performListTest(String[] originalNames, String[] revisedNames) {
+	def void performListTest(String[] originalNames, String[] revisedNames) {
 		val original = createClass("aClass", originalNames.map[createAttribute])
 		val revised = createClass("aClass", revisedNames.map[createAttribute])
-		val revisedCopy = EcoreUtil.copy(revised)
 		
-		val patch = compare(original, revised)
-		assertEmfEquals(revisedCopy, patch.apply(original))
+		val delta = new Comparer().compare(original, revised)
+		
+		println(EMFPrettyPrint.prettyPrint(delta))
+		new Patcher().patch(original, delta)		
+		assertEmfEquals(revised, original)
 	}
 	
 	@Test
@@ -78,6 +80,4 @@ class BasicTests {
 	def mixedTest() {
 		performListTest(#["a", "b", "c"], #["e", "b", "c"])
 	}
-	
-	
 }
