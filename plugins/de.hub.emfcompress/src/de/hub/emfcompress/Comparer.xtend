@@ -19,7 +19,29 @@ class Comparer {
 	val Map<Pair<EObject,EStructuralFeature>, DSetting> settingDeltas = newHashMap	
 	
 	val Map<Pair<EObject,EObject>, Boolean> matches = newHashMap	
-	val copier = new Copier
+	val copier = new Copier {		
+		override get(Object key) {
+			val result = super.get(key)
+			if (result == null) {
+				// a reference is requested that was not copied
+				precondition[key instanceof EObject]
+				val revised = key as EObject
+				val original = equalizer.get(revised)
+				precondition[original != null]
+				val delta = original.delta
+				var proxy = delta.proxy
+				if (proxy == null) {
+					val proxyClass = getTarget(revised.eClass)
+					proxy = proxyClass.EPackage.EFactoryInstance.create(proxyClass)
+					delta.proxy = proxy
+				}	
+				put(revised,proxy)			
+				return proxy				
+			} else {
+				return result
+			}
+		}		
+	}
 	val equalizer = new EqualityHelper {		
 		override equals(EObject original, EObject revised) {
 			if (couldMatch(original, revised)) {
@@ -47,9 +69,38 @@ class Comparer {
 		val comparer = new Comparer()
 		comparer.rootDelta.originalClass = original.eClass
 		comparer.compareContainment(original, revised)
-		// TODO handle references in copier
-		// TODO handle references in references
+		comparer.handleReferences
+	
 		return comparer.rootDelta		
+	}
+	
+	private def void handleReferences() {
+		// handle references in references
+		for(referenceDelta:references) {
+			val delta = referenceDelta.key
+			val values = referenceDelta.value
+			for(value:values) {
+				val copy = copier.get(value)
+				val reference = if (copy != null) {
+					val newReference = factory.createDRevisedObjectReference
+					newReference.value = copy
+					newReference
+				} else {
+					val equalOriginal = equalizer.get(value)
+					if (equalOriginal != null) {
+						val newReference = factory.createDOriginalObjectReference
+						newReference.value = equalOriginal.delta
+						newReference
+					} else {
+						unreachable as DObjectReference
+					}
+				}
+				delta.references.add(reference)
+			}
+		}
+		
+		// handle references in copier, the copier's specialized get method will create proxies for non copied elements
+		copier.copyReferences	
 	}
 	
 	private def DSetting delta(EObject container, EStructuralFeature feature) {
@@ -92,13 +143,41 @@ class Comparer {
 		}
 	}
 	
+	private def boolean derivedFromOpposite(EStructuralFeature feature) {
+		switch(feature) {
+			EAttribute: false
+			EReference: 
+				if (feature.EOpposite != null) {
+					val opposite = feature.EOpposite
+					if (!opposite.changeable || opposite.derived) {
+						false
+					} else if (opposite.containment) {
+						true
+					} else if (!feature.many && opposite.many) {
+						false // prefer the single valued feature
+					} else {
+						// use a unique but meaningless criteria
+						val featureHC = System.identityHashCode(feature)
+						val oppositeHC = System.identityHashCode(opposite)
+						if (featureHC == oppositeHC) { // extremely unlikely 
+							unreachable as Boolean // TODO compare by qualified name
+						} else {
+							featureHC > oppositeHC
+						}
+					}
+				} else {
+					false
+				}
+			default: unreachable as Boolean
+		}
+	}
+	
 	private def void compareContainment(EObject original, EObject revised) {
 		precondition[original.eClass == revised.eClass]
 		
 		val eClass = original.eClass	
 		for(feature:eClass.EAllStructuralFeatures) {
-			if (feature.changeable && !feature.derived) {
-				// TODO only diff one direction of bidirectional refs
+			if (feature.changeable && !feature.derived && !feature.derivedFromOpposite) {
 				val List<DValues> valueDeltas = newArrayList		 				
 				if (feature.many) {
 					val originalValues = original.eGet(feature) as List<Object>
