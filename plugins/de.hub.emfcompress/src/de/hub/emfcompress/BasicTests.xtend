@@ -39,7 +39,7 @@ class BasicTests {
 		val original = createClass("aClass", originalNames.map[createAttribute])
 		val revised = createClass("aClass", revisedNames.map[createAttribute])
 		
-		val delta = new Comparer().compare(original, revised)
+		val delta = Comparer.compare(original, revised)
 		
 		println(EMFPrettyPrint.prettyPrint(delta))
 		new Patcher().patch(original, delta)		

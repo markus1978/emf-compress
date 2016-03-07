@@ -8,41 +8,50 @@ import java.util.Map
 import java.util.List
 import difflib.DiffUtils
 import org.eclipse.emf.ecore.util.EcoreUtil
+import org.eclipse.emf.ecore.util.EcoreUtil.Copier
 
 enum MatchType { different, match, equal }
 
 class Comparer {
 	
 	val factory = EmfCompressFactory.eINSTANCE
+	val Map<Pair<EObject,EObject>,MatchType> matches = newHashMap
+	val copier = new Copier
 	
-	public def DObject compare(EObject original, EObject revised) {
+	public static def DObject compare(EObject original, EObject revised) {
+		val comparer = new Comparer()
+		val delta = comparer.compareContainment(original, revised)
+		
+		return delta		
+	}
+	
+	private def DObject compareContainment(EObject original, EObject revised) {
 		precondition[original.eClass == revised.eClass]
 		
 		val eClass = original.eClass	
 		val List<DSetting> settingDeltas = newArrayList	
 		for(feature:eClass.EAllStructuralFeatures) {
-			if (feature.changeable && !feature.derived) {
-				val Map<Pair<EObject,EObject>,MatchType> eObjectMatch = newHashMap
+			if (feature.changeable && !feature.derived && (feature instanceof EAttribute || (feature as EReference).containment)) {
 				val List<DValues> valueDeltas = newArrayList
-				val List<DValueUpdate> updates = newArrayList
+				val List<DValueMatch> matches = newArrayList
 				val (EObject,EObject)=> void onMatched = [matchedOriginal, matchedRevised|
 					val delta = compare(matchedOriginal, matchedRevised)
 					if (delta != null) {
-						val update = factory.createDValueUpdate
-						update.originalIndex = if (feature.many) {
+						val match = factory.createDValueMatch
+						match.originalIndex = if (feature.many) {
 							(original.eGet(feature) as List<Object>).indexOf(matchedOriginal) // TODO
 						} else {
 							-1
 						}
-						update.value = delta
-						updates += update
+						match.value = delta
+						matches += match
 					}
 				]				 				
 				if (feature.many) {
 					val originalValues = original.eGet(feature) as List<Object>
 					val revisedValues = revised.eGet(feature) as List<Object>
 					val patch = DiffUtils.diff(originalValues, revisedValues) [comparedOriginal,comparedRevised|
-						compare(comparedOriginal,comparedRevised,feature,eObjectMatch,onMatched) 
+						compare(comparedOriginal,comparedRevised,feature,onMatched) 
 					]
 					if (!patch.deltas.empty) {
 						valueDeltas += patch.deltas.map[
@@ -53,7 +62,7 @@ class Comparer {
 									replacedDataValues							
 								}
 								EReference: {
-									val replacedObjectValues = factory.createDObjectValues
+									val replacedObjectValues = factory.createDContainedObjectValues
 									it.revised.lines.forEach[replacedObjectValues.values += copy(it as EObject)]
 									replacedObjectValues
 								}
@@ -65,14 +74,14 @@ class Comparer {
 						]				
 					}
 				} else {
-					compare(original.eGet(feature), revised.eGet(feature), feature, eObjectMatch, onMatched)
+					compare(original.eGet(feature), revised.eGet(feature), feature, onMatched)
 				}
 				
-				if (!valueDeltas.empty || !updates.empty) {
+				if (!valueDeltas.empty || !matches.empty) {
 					val settingDelta = factory.createDSetting
 					settingDelta.featureID = eClass.getFeatureID(feature)
 					settingDelta.deltas += valueDeltas
-					settingDelta.updates += updates	
+					settingDelta.matches += matches	
 					settingDeltas += settingDelta
 				}
 			}
@@ -89,7 +98,7 @@ class Comparer {
 	}
 	
 	protected def EObject copy(EObject eObject) {
-		return EcoreUtil.copy(eObject)
+		return copier.copy(eObject)
 	}
 	
 	protected def boolean equals(EObject original, EObject revised) {
@@ -114,12 +123,7 @@ class Comparer {
 		}
 	}
 	
-	private def boolean compare(
-		Object original, Object revised, 
-		EStructuralFeature feature,
-		Map<Pair<EObject,EObject>,MatchType> eObjectMatches, 
-		(EObject,EObject)=>void match
-	) {
+	private def boolean compare(Object original, Object revised, EStructuralFeature feature, (EObject,EObject)=>void onMatch) {
 		return if (original == null || revised == null) {
 			original == revised
 		} else if (original == revised) {
@@ -135,15 +139,15 @@ class Comparer {
 				}
 				EReference: {
 					val pair = (original as EObject)->(revised as EObject)
-					val existingMatch = eObjectMatches.get(pair)
+					val existingMatch = matches.get(pair)
 					if (existingMatch == null) {
 						val newMatch = match(original as EObject, revised as EObject)
-						if (newMatch == MatchType.match) {
-							match.apply(original as EObject, revised as EObject)
-						}							
-						eObjectMatches.put(pair,newMatch)
+						if (newMatch == MatchType.match && feature.containment) {
+							onMatch.apply(original as EObject, revised as EObject)
+						} 
+						matches.put(pair,newMatch)												
 						newMatch != MatchType.different
-					} else {
+					} else {						
 						existingMatch != MatchType.different
 					}
 				}

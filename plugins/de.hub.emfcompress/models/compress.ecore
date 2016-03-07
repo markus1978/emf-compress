@@ -8,12 +8,12 @@
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="DSetting">
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="featureID" eType="ecore:EDataType ../../org.eclipse.emf.ecore/model/Ecore.ecore#//EInt"/>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="updates" upperBound="-1"
-        eType="#//DValueUpdate" containment="true"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="matches" upperBound="-1"
+        eType="#//DValueMatch" containment="true"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="deltas" upperBound="-1"
         eType="#//DValues" containment="true"/>
   </eClassifiers>
-  <eClassifiers xsi:type="ecore:EClass" name="DValueUpdate">
+  <eClassifiers xsi:type="ecore:EClass" name="DValueMatch">
     <eStructuralFeatures xsi:type="ecore:EReference" name="value" eType="#//DObject"
         containment="true"/>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="originalIndex" eType="ecore:EDataType ../../org.eclipse.emf.ecore/model/Ecore.ecore#//EInt"/>
@@ -26,9 +26,20 @@
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="values" upperBound="-1"
         eType="ecore:EDataType ../../org.eclipse.emf.ecore/model/Ecore.ecore#//EJavaObject"/>
   </eClassifiers>
-  <eClassifiers xsi:type="ecore:EClass" name="DObjectValues" eSuperTypes="#//DValues">
+  <eClassifiers xsi:type="ecore:EClass" name="DContainedObjectValues" eSuperTypes="#//DValues">
     <eStructuralFeatures xsi:type="ecore:EReference" name="values" upperBound="-1"
         eType="ecore:EClass ../../org.eclipse.emf.ecore/model/Ecore.ecore#//EObject"
         containment="true"/>
   </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="DReferencedObjectValues" eSuperTypes="#//DValues">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="references" upperBound="-1"
+        eType="#//DObjectReference" containment="true"/>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="DOriginalObjectReference" eSuperTypes="#//DObjectReference">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="value" eType="#//DValueMatch"/>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="DRevisedObjectReference" eSuperTypes="#//DObjectReference">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="value" eType="ecore:EClass ../../org.eclipse.emf.ecore/model/Ecore.ecore#//EObject"/>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="DObjectReference"/>
 </ecore:EPackage>

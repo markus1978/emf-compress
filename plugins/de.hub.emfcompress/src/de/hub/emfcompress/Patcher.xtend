@@ -14,20 +14,20 @@ class Patcher {
 		precondition[original.eClass == eClass]
 		for(settingDelta:objectDelta.settings) {
 			val feature = eClass.getEStructuralFeature(settingDelta.featureID)
-			for(update:settingDelta.updates) {
-				update.patch(original, feature)	
+			for(match:settingDelta.matches) {
+				match.patch(original, feature)	
 			}
 			settingDelta.deltas.patch(original, feature)
 		}
 	}
 	
-	private def void patch(DValueUpdate update, EObject original, EStructuralFeature feature) {
+	private def void patch(DValueMatch match, EObject original, EStructuralFeature feature) {
 		val value = if (feature.many) {
-			(original.eGet(feature) as List<EObject>).get(update.originalIndex)
+			(original.eGet(feature) as List<EObject>).get(match.originalIndex)
 		} else {
 			original.eGet(feature) as EObject
 		}
-		value.patch(update.value)
+		value.patch(match.value)
 	}
 	
 	protected def EObject copy(EObject eObject) {
@@ -44,7 +44,7 @@ class Patcher {
 			index = delta.end
 			result = result + switch delta {
 				DDataValues: delta.values.iterator
-				DObjectValues: delta.values.iterator.map[it.copy]
+				DContainedObjectValues: delta.values.iterator.map[it.copy]
 				default: unreachable as Iterator<Object>	
 			}
 		}
