@@ -21,13 +21,13 @@ class Patcher {
 		}
 	}
 	
-	private def void patch(DValueMatch match, EObject original, EStructuralFeature feature) {
+	private def void patch(DObject match, EObject original, EStructuralFeature feature) {
 		val value = if (feature.many) {
 			(original.eGet(feature) as List<EObject>).get(match.originalIndex)
 		} else {
 			original.eGet(feature) as EObject
 		}
-		value.patch(match.value)
+		value.patch(match)
 	}
 	
 	protected def EObject copy(EObject eObject) {
