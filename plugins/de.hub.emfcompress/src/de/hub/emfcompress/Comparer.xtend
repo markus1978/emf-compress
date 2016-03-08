@@ -19,7 +19,7 @@ class Comparer {
 	val Map<Pair<EObject,EStructuralFeature>, DSetting> settingDeltas = newHashMap	
 	
 	val Map<Pair<EObject,EObject>, Boolean> matches = newHashMap	
-	val copier = new Copier {		
+	val copier = new Copier {
 		override get(Object key) {
 			val result = super.get(key)
 			if (result == null) {
@@ -34,8 +34,7 @@ class Comparer {
 					val proxyClass = getTarget(revised.eClass)
 					proxy = proxyClass.EPackage.EFactoryInstance.create(proxyClass)
 					delta.proxy = proxy
-				}	
-				put(revised,proxy)			
+				}		
 				return proxy				
 			} else {
 				return result
@@ -53,6 +52,7 @@ class Comparer {
 					if (doMatch) {
 						put(original, revised)
 						put(revised, original)
+						compareContainment(original, revised)
 					}			
 					doMatch														
 				} else {						
@@ -65,13 +65,12 @@ class Comparer {
 	}
 	val List<Pair<DReferencedObjectValues, List<EObject>>> references = newArrayList
 	
-	public static def DObject compare(EObject original, EObject revised) {
-		val comparer = new Comparer()
-		comparer.rootDelta.originalClass = original.eClass
-		comparer.compareContainment(original, revised)
-		comparer.handleReferences
+	public def DObject compare(EObject original, EObject revised) {
+		rootDelta.originalClass = original.eClass
+		compareContainment(original, revised)
+		handleReferences
 	
-		return comparer.rootDelta		
+		return rootDelta		
 	}
 	
 	private def void handleReferences() {
@@ -143,6 +142,10 @@ class Comparer {
 		}
 	}
 	
+	protected def boolean ignore(EStructuralFeature feature) {
+		return false
+	}
+	
 	private def boolean derivedFromOpposite(EStructuralFeature feature) {
 		switch(feature) {
 			EAttribute: false
@@ -177,7 +180,7 @@ class Comparer {
 		
 		val eClass = original.eClass	
 		for(feature:eClass.EAllStructuralFeatures) {
-			if (feature.changeable && !feature.derived && !feature.derivedFromOpposite) {
+			if (feature.changeable && !feature.derived && !feature.derivedFromOpposite && !feature.ignore) {
 				val List<DValues> valueDeltas = newArrayList		 				
 				if (feature.many) {
 					val originalValues = original.eGet(feature) as List<Object>
@@ -201,7 +204,9 @@ class Comparer {
 									} else {
 										val replacedObjectValues = factory.createDReferencedObjectValues
 										val referencedValues = newArrayList
-										it.revised.lines.forEach[referencedValues.add(it as EObject)]
+										it.revised.lines.forEach[
+											referencedValues.add(it as EObject)
+										]
 										references.add(replacedObjectValues->referencedValues)
 										replacedObjectValues
 									}

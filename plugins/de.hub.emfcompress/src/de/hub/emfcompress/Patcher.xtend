@@ -5,11 +5,73 @@ import java.util.Iterator
 import java.util.List
 import org.eclipse.emf.ecore.EObject
 import org.eclipse.emf.ecore.EStructuralFeature
-import org.eclipse.emf.ecore.util.EcoreUtil
+import org.eclipse.emf.ecore.util.EcoreUtil.Copier
+import org.eclipse.emf.ecore.EReference
 
 class Patcher {
+	val List<Pair<DRevisedObjectReference,Integer>> proxies = newArrayList	
+	val copier = new Copier {
+		override get(Object key) {			
+			val container = (key as EObject).eContainer
+			if (container instanceof DObject) {
+				return container.transientOriginal
+			} else {
+				return super.get(key)	
+			}
+		}
+	}
 	
-	public def patch(EObject original, DObject objectDelta) {		
+	public def patch(EObject original, DObject delta) {
+		saveOriginals(original, delta)				
+		patchContainment(original, delta)		
+		copier.copyReferences
+		proxies.forEach[
+			val ref = it.key
+			val index = it.value
+			
+			val value = copier.get(ref.value)
+			precondition[value != null]
+			
+			val settingDelta = ref.eContainer.eContainer as DSetting
+			val objectDelta = settingDelta.eContainer as DObject
+			val referer = objectDelta.transientOriginal
+			val feature = objectDelta.originalClass.getEStructuralFeature(settingDelta.featureID)
+			
+			if (feature.many) {
+				val values = referer.eGet(feature) as List<EObject>
+				values.set(index, value)
+			} else {
+				referer.eSet(feature, value)
+			}
+		]
+	}
+	
+	private def void saveOriginals(EObject original, DObject objectDelta) {
+		objectDelta.transientOriginal = original
+		val eClass = original.eClass
+		for (settingDelta:objectDelta.settings) {
+			val matches = settingDelta.matches
+			if (!matches.empty) {
+				val feature = eClass.getEStructuralFeature(settingDelta.featureID)
+				if (feature instanceof EReference) {
+					if (feature.containment) {
+						if (feature.many) {
+							val values = original.eGet(feature) as List<EObject>
+							for (match:matches) saveOriginals(values.get(match.originalIndex), match)
+						} else {
+							val value = original.eGet(feature)
+							if (value != null) {
+								precondition[matches.size == 1]
+								saveOriginals(value as EObject, matches.get(0))
+							}
+						}
+					}
+				}			
+			}
+		}
+	}
+	
+	private def patchContainment(EObject original, DObject objectDelta) {	
 		val eClass = objectDelta.originalClass
 		precondition[original.eClass == eClass]
 		for(settingDelta:objectDelta.settings) {
@@ -27,30 +89,42 @@ class Patcher {
 		} else {
 			original.eGet(feature) as EObject
 		}
-		value.patch(match)
+		value.patchContainment(match)
 	}
 	
 	protected def EObject copy(EObject eObject) {
-		return EcoreUtil.copy(eObject)
+		return copier.copy(eObject)
 	}
 	
 	private def void patch(Iterable<DValues> deltas, EObject original, EStructuralFeature feature) {
 		val originalValues = original.eGet(feature) as List<Object>
 				
-		var Iterator<Object> result = newArrayList.iterator
-		var index = 0
+		val List<Object> revisedValues = newArrayList
+		var originalIndex = 0
 		for(delta:deltas) {
-			result = result + originalValues.sub(index, delta.start)
-			index = delta.end
-			result = result + switch delta {
+			originalValues.sub(originalIndex, delta.start).forEach[revisedValues+=it]
+			originalIndex = delta.end
+			switch delta {
 				DDataValues: delta.values.iterator
-				DContainedObjectValues: delta.values.iterator.map[it.copy]
+				DContainedObjectValues: delta.values.iterator.map[it.copy].forEach[revisedValues+=it]
+				DReferencedObjectValues: for(ref:delta.references) {
+					val value = switch ref {
+						DOriginalObjectReference: ref.value.transientOriginal
+						DRevisedObjectReference: {
+							val eClass = ref.value.eClass
+							val proxy = eClass.EPackage.EFactoryInstance.create(eClass)
+							proxies += ref -> revisedValues.size
+							proxy						
+						}
+						default: unreachable as EObject
+					}
+					revisedValues += value
+				}
 				default: unreachable as Iterator<Object>	
 			}
 		}
-		result = result + originalValues.sub(index, originalValues.size)
+		originalValues.sub(originalIndex, originalValues.size).forEach[revisedValues+=it]
 		
-		val revisedValues = result.toList
 		originalValues.clear
 		originalValues.addAll(revisedValues)	
 	}

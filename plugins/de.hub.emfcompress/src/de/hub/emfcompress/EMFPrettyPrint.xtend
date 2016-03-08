@@ -7,11 +7,15 @@ import org.eclipse.emf.ecore.EStructuralFeature
 
 class EMFPrettyPrint {
 	
-	static def signature(EObject eObject) {
+	protected def String additionalValueDescription(EObject container, EStructuralFeature feature, Object value) {
+		return null
+	}
+	
+	def signature(EObject eObject) {
 		return '''«eObject.name»[«eObject.eClass.name»]'''
 	}
 	
-	public static def String prettyPrint(EObject eObject) {
+	public def String prettyPrint(EObject eObject) {
 		val features = eObject.eClass.EAllStructuralFeatures
 			.filter[!isDerived && !isTransient && !isVolatile]
 			.filter[eObject.eIsSet(it)]		
@@ -30,21 +34,24 @@ class EMFPrettyPrint {
 		}	
 	}
 	
-	private static def prettyPrint(EObject eObject, EStructuralFeature feature) {
+	private def prettyPrint(EObject eObject, EStructuralFeature feature) {
 		if (feature.many) {
 			'''
 				«feature.name» = [
 					«FOR value: eObject.eGet(feature) as List<?>»
-						«prettyPrintValue(value, feature)»
+						«val additional = additionalValueDescription(eObject, feature, value)»
+						«prettyPrintValue(value, feature)» «IF additional!=null»(«additional»)«ENDIF»
 					«ENDFOR»
 				]
 			'''
 		} else {
-			'''«feature.name» = «eObject.eGet(feature)?.prettyPrintValue(feature)»'''
+			val value = eObject.eGet(feature)
+			val additional = if (value != null) additionalValueDescription(eObject, feature, value) else null
+			'''«feature.name» = «value?.prettyPrintValue(feature)» «IF additional!=null»(«additional»)«ENDIF»'''
 		}
 	}
 	
-	private static def prettyPrintValue(Object object, EStructuralFeature feature) {
+	private def prettyPrintValue(Object object, EStructuralFeature feature) {
 		return switch (object) {
 			EObject: if ((feature as EReference).containment) {
 					prettyPrint(object)
@@ -56,7 +63,7 @@ class EMFPrettyPrint {
 		}
 	}
 	
-	public static def name(EObject eObject) {
+	public def name(EObject eObject) {
 		val eClass = eObject.eClass
 		val nameAttr = eClass.EAllAttributes.filter[!many].findFirst[it.name.toLowerCase == "name" || it.name.toLowerCase == "id"]
 		return if (nameAttr != null)
@@ -65,7 +72,7 @@ class EMFPrettyPrint {
 			""
 	}
 	
-	public static def normalize(String str) {
+	public def normalize(String str) {
 		if (str.length > 32) str.substring(0, 30) + "..." else str
 	}
 }
