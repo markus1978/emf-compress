@@ -30,4 +30,18 @@ class AbstractTests {
  			throw e
  		}
 	}
+	
+	def void performTest(Comparer comparer, EObject original, EObject revised) {
+		val delta = comparer.compare(original, revised)
+		val patched = EcoreUtil.copy(original)
+		
+//		println(prettyPrint(delta))
+		new Patcher().patch(patched, delta)	
+		assertEmfEquals(patched, revised)
+	}
+	
+	def void performTestBothDirections(EObject original, EObject revised, ()=>Comparer newComparer) {
+		performTest(newComparer.apply, original, revised)
+		performTest(newComparer.apply, revised, original)
+	}
 }

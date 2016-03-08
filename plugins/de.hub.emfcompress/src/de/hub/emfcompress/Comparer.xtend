@@ -219,7 +219,35 @@ class Comparer {
 						]				
 					}
 				} else {
-					compare(original.eGet(feature), revised.eGet(feature), feature)
+					val revisedValue = revised.eGet(feature)
+					if (!compare(original.eGet(feature), revisedValue, feature)) {
+						valueDeltas += switch feature {
+							EAttribute: {
+								val replacedDataValues = factory.createDDataValues
+								if (revisedValue != null) {
+									replacedDataValues.values += revisedValue
+								}
+								replacedDataValues
+							}
+							EReference: {
+								if (feature.containment) {
+									val replacedObjectValues = factory.createDContainedObjectValues
+									if (revisedValue != null) {
+										replacedObjectValues.values += copier.copy(revisedValue as EObject)
+									}
+									replacedObjectValues
+								} else {
+									val replacedObjectValues = factory.createDReferencedObjectValues
+									if (revisedValue != null) {
+										val referencedValues = newArrayList(revisedValue as EObject)									
+										references.add(replacedObjectValues->referencedValues)									
+									}
+									replacedObjectValues
+								}
+							}
+							default: unreachable as DValues
+						}
+					}
 				}
 				
 				if (!valueDeltas.empty) {

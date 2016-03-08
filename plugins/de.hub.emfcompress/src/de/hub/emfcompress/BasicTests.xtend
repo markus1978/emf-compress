@@ -1,26 +1,21 @@
 package de.hub.emfcompress
 
-import com.google.inject.Injector
 import java.io.ByteArrayInputStream
 import org.eclipse.emf.common.util.URI
 import org.eclipse.emf.ecore.EAttribute
 import org.eclipse.emf.ecore.EObject
+import org.eclipse.emf.ecore.EStructuralFeature
 import org.eclipse.emf.ecore.EcoreFactory
+import org.eclipse.emf.ecore.EcorePackage
 import org.eclipse.emf.ecore.resource.Resource
 import org.eclipse.emf.ecore.resource.Resource.Factory
 import org.eclipse.ocl.pivot.utilities.OCL
 import org.eclipse.ocl.xtext.oclinecore.OCLinEcoreStandaloneSetup
 import org.eclipse.ocl.xtext.oclinecore.utilities.OCLinEcoreCSResource
-import org.junit.BeforeClass
+import org.junit.Before
 import org.junit.Test
 
-import static de.hub.emfcompress.BasicTests.*
-import org.eclipse.emf.ecore.EStructuralFeature
-import org.eclipse.emf.ecore.EcorePackage
-
 class BasicTests extends AbstractTests {
-	
-	static var Injector injector = null
 	
 	private def createAttribute(String name) {
 		val content = EcoreFactory.eINSTANCE.createEAttribute
@@ -35,9 +30,9 @@ class BasicTests extends AbstractTests {
 		return container
 	}
 	
-	@BeforeClass
-	public static def void beforeClass() {
-		injector = new OCLinEcoreStandaloneSetup().createInjectorAndDoEMFRegistration
+	@Before
+	public def void beforeClass() {
+		val injector = new OCLinEcoreStandaloneSetup().createInjectorAndDoEMFRegistration
 		Resource.Factory.Registry.INSTANCE.extensionToFactoryMap.put("oclinecore", new Factory {			
 			override createResource(URI uri) {
 				val resource = injector.getInstance(OCLinEcoreCSResource)
@@ -60,6 +55,8 @@ class BasicTests extends AbstractTests {
 			override protected ignore(EStructuralFeature feature) {
 				if (feature == EcorePackage.eINSTANCE.EClass_EGenericSuperTypes) {
 					return true
+				} else if (feature == EcorePackage.eINSTANCE.ETypedElement_EGenericType) {
+					return true
 				}
 				return false
 			}			
@@ -72,18 +69,8 @@ class BasicTests extends AbstractTests {
 		
 		val delta = newComparer.compare(original, revised)
 		
-		println(prettyPrint(delta))
 		new Patcher().patch(original, delta)		
 		assertEmfEquals(revised, original)
-	}
-	
-	def void performTest(EObject original, EObject revised) {
-		val delta = newComparer.compare(original, revised)
-		
-		println(prettyPrint(delta))
-		new Patcher().patch(original, delta)
-		val patched = original		
-		assertEmfEquals(patched, revised)
 	}
 	
 	@Test
@@ -144,8 +131,34 @@ class BasicTests extends AbstractTests {
 			}
 		''')
 		
-		performTest(original, revised)
-		performTest(revised, original)
+		performTestBothDirections(revised, original)[newComparer]
+	}
+	
+	@Test
+	def void addReplaceSingleReferenceTest() {
+		val original = ecore('''
+			package test : t='http://uri/1.0' {
+				class A {
+				}
+				
+				class B {
+					property t:A[?];
+				}
+			}
+		''')
+		
+		val revised = ecore('''
+			package test : t='http://uri/1.0' {
+				class C {
+				}
+				
+				class B {
+					property t:C[?];
+				}
+			}
+		''')
+		
+		performTestBothDirections(revised, original)[newComparer]
 	}
 	
 	@Test
@@ -174,8 +187,7 @@ class BasicTests extends AbstractTests {
 			}
 		''')
 		
-		performTest(original, revised)
-		performTest(revised, original)
+		performTestBothDirections(revised, original)[newComparer]
 	}
 	
 	@Test
@@ -200,7 +212,6 @@ class BasicTests extends AbstractTests {
 			}
 		''')
 		
-		performTest(original, revised)
-		performTest(revised, original)
+		performTestBothDirections(revised, original)[newComparer]
 	}
 }

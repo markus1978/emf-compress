@@ -96,37 +96,55 @@ class Patcher {
 		return copier.copy(eObject)
 	}
 	
-	private def void patch(Iterable<DValues> deltas, EObject original, EStructuralFeature feature) {
-		val originalValues = original.eGet(feature) as List<Object>
-				
-		val List<Object> revisedValues = newArrayList
-		var originalIndex = 0
-		for(delta:deltas) {
-			originalValues.sub(originalIndex, delta.start).forEach[revisedValues+=it]
-			originalIndex = delta.end
-			switch delta {
-				DDataValues: delta.values.iterator
-				DContainedObjectValues: delta.values.iterator.map[it.copy].forEach[revisedValues+=it]
-				DReferencedObjectValues: for(ref:delta.references) {
-					val value = switch ref {
-						DOriginalObjectReference: ref.value.transientOriginal
-						DRevisedObjectReference: {
-							val eClass = ref.value.eClass
-							val proxy = eClass.EPackage.EFactoryInstance.create(eClass)
-							proxies += ref -> revisedValues.size
-							proxy						
-						}
-						default: unreachable as EObject
-					}
-					revisedValues += value
-				}
-				default: unreachable as Iterator<Object>	
+	private def EObject resolve(DObjectReference ref, int index) {
+		return switch ref {
+			DOriginalObjectReference: ref.value.transientOriginal
+			DRevisedObjectReference: {
+				val eClass = ref.value.eClass
+				val proxy = eClass.EPackage.EFactoryInstance.create(eClass)
+				proxies += ref -> index
+				proxy						
 			}
+			default: unreachable as EObject
 		}
-		originalValues.sub(originalIndex, originalValues.size).forEach[revisedValues+=it]
-		
-		originalValues.clear
-		originalValues.addAll(revisedValues)	
+	}
+	
+	private def void patch(Iterable<DValues> deltas, EObject original, EStructuralFeature feature) {
+		if (feature.many) {
+			val originalValues = original.eGet(feature) as List<Object>
+					
+			val List<Object> revisedValues = newArrayList
+			var originalIndex = 0
+			for(delta:deltas) {
+				originalValues.sub(originalIndex, delta.start).forEach[revisedValues+=it]
+				originalIndex = delta.end
+				switch delta {
+					DDataValues: delta.values.iterator
+					DContainedObjectValues: delta.values.iterator.map[it.copy].forEach[revisedValues+=it]
+					DReferencedObjectValues: for(ref:delta.references) {
+						val value = ref.resolve(revisedValues.size)
+						revisedValues += value
+					}
+					default: unreachable as Iterator<Object>	
+				}
+			}
+			originalValues.sub(originalIndex, originalValues.size).forEach[revisedValues+=it]
+			
+			originalValues.clear
+			originalValues.addAll(revisedValues)
+		} else {
+			val delta = deltas.iterator.next
+			val patchedValue = switch(delta) {
+				DDataValues: if (delta.values.empty) null else delta.values.get(0)
+				DContainedObjectValues: if (delta.values.empty) null else delta.values.get(0).copy
+				DReferencedObjectValues: if (delta.references.empty) {
+					null
+				} else {
+					delta.references.get(0).resolve(-1)	
+				}
+			}
+			original.eSet(feature, patchedValue)
+		}	
 	}
 	
 	private static def Iterator<Object> sub(List<Object> data, int start, int end) {
