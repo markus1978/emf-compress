@@ -1,14 +1,13 @@
 package de.hub.emfcompress.tests
 
 import de.hub.emfcompress.Comparer
+import de.hub.emfcompress.EcoreComparerConfigration
 import de.hub.emfcompress.Patcher
 import java.io.ByteArrayInputStream
 import org.eclipse.emf.common.util.URI
 import org.eclipse.emf.ecore.EAttribute
 import org.eclipse.emf.ecore.EObject
-import org.eclipse.emf.ecore.EStructuralFeature
 import org.eclipse.emf.ecore.EcoreFactory
-import org.eclipse.emf.ecore.EcorePackage
 import org.eclipse.emf.ecore.resource.Resource
 import org.eclipse.emf.ecore.resource.Resource.Factory
 import org.eclipse.ocl.pivot.utilities.OCL
@@ -53,16 +52,7 @@ class BasicTests extends AbstractTests {
 	}
 	
 	private def newComparer() {
-		return new Comparer {		
-			override protected ignore(EStructuralFeature feature) {
-				if (feature == EcorePackage.eINSTANCE.EClass_EGenericSuperTypes) {
-					return true
-				} else if (feature == EcorePackage.eINSTANCE.ETypedElement_EGenericType) {
-					return true
-				}
-				return false
-			}			
-		}
+		return new Comparer(EcoreComparerConfigration.instance)
 	}
 	
 	def void performListTest(String[] originalNames, String[] revisedNames) {

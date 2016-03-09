@@ -1,9 +1,9 @@
 package de.hub.emfcompress.tests
 
 import de.hub.emfcompress.Comparer
+import de.hub.emfcompress.EcoreComparerConfigration
 import org.eclipse.emf.ecore.EClass
 import org.eclipse.emf.ecore.EPackage
-import org.eclipse.emf.ecore.EStructuralFeature
 import org.eclipse.emf.ecore.EcorePackage
 import org.eclipse.emf.ecore.util.EcoreUtil
 import org.junit.Test
@@ -11,14 +11,7 @@ import org.junit.Test
 class EcoreTests extends AbstractTests {
 	
 	private def newComparer() {
-		return new Comparer {		
-			override protected ignore(EStructuralFeature feature) {
-				if (feature == EcorePackage.eINSTANCE.EClass_EGenericSuperTypes) {
-					return true
-				}
-				return false
-			}			
-		}
+		return new Comparer(EcoreComparerConfigration.instance)
 	}
 	
 	@Test

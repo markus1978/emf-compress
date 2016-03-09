@@ -17,13 +17,14 @@ import org.eclipse.emf.ecore.util.EcoreUtil.EqualityHelper
  * to either of the models. Elements of the original model are referred to by means of features and indices;
  * elements to the revised model are copied to be part of the patch.
  * 
- * A comparer instance can only be used once. Comparer can be configured through the protected callback methods.
+ * Comparer can be configured through the protected callback methods.
  */
 class Comparer {
 	
-	val factory = EmfCompressFactory.eINSTANCE
+	val EmfCompressFactory factory
+	val extension ComparerConfiguration config 
 	
-	val ObjectDelta rootDelta = factory.createObjectDelta
+	var ObjectDelta rootDelta = null
 	val Map<EObject,ObjectDelta> objectDeltas = newHashMap
 	val Map<Pair<EObject,EStructuralFeature>, SettingDelta> settingDeltas = newHashMap	
 	val Map<Pair<EObject,EObject>, Boolean> matches = newHashMap
@@ -87,11 +88,33 @@ class Comparer {
 	}
 	val List<Pair<ReferencedObjectsDelta, List<EObject>>> references = newArrayList
 	
+	new(ComparerConfiguration config, EmfCompressFactory factory) {
+		this.factory = factory
+		this.config = config
+	}
+	
+	new(ComparerConfiguration config) {
+		this.factory = EmfCompressFactory.eINSTANCE
+		this.config = config
+	}
+	
+	private def void reset() {
+		equalizer.clear
+		copier.clear
+		objectDeltas.clear
+		settingDeltas.clear
+		matches.clear
+		references.clear
+		rootDelta = factory.createObjectDelta
+	}
+	
 	/**
 	 * Compares the given elements and produces a delta that can be used to
 	 * patch the first object (original) to yield the second object (revised).
 	 */
 	public def ObjectDelta compare(EObject original, EObject revised) {
+		reset
+		
 		rootDelta.originalClass = original.eClass
 		// First we recursively compare all settings of the given objects.
 		// This might create deltas with references. 		
@@ -103,33 +126,6 @@ class Comparer {
 	
 		return rootDelta		
 	}
-	
-	/**
-	 * Callback that allows clients to determine if a feature should be ignored 
-	 * during comparison.
-	 * @returns true, if the feature is to be ignored.
-	 */	
-	protected def boolean ignore(EStructuralFeature feature) {
-		return false
-	}
-	
-	/**
-	 * Callback that allows clients to determine if the given objects should be 
-	 * compared to match or should be compared to equal.
-	 * @returns true, if the given objects should be matched and not equaled.
-	 */
-	protected def boolean compareWithMatch(EObject original,EObject revised) {
-		return original.eClass == revised.eClass && original.eClass.getEStructuralFeature("name") != null
-	}
-	
-	/**
-	 * Callback that allows clients to provide custom match rules. 
-	 * @returns true, if the given objects match.
-	 */
-	protected def boolean match(EObject original,EObject revised) {
-		val nameFeature = original.eClass.getEStructuralFeature("name")
-		return original.eGet(nameFeature) == revised.eGet(nameFeature)
-	} 
 	
 	private def void handleReferences() {
 		// handle references in references

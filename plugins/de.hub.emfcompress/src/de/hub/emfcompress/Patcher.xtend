@@ -33,10 +33,18 @@ class Patcher {
 		}
 	}
 	
+	private def reset() {
+		copier.clear
+		proxies.clear
+		patchedOriginals.clear
+	}
+	
 	/**
 	 * Applies the given delta to the original. This will modify the original.
 	 */
 	public def patch(EObject original, ObjectDelta delta) {
+		reset
+		
 		// associate object deltas with the original objects they represent
 		saveOriginals(original, delta)				
 		// recursively apply the patch
