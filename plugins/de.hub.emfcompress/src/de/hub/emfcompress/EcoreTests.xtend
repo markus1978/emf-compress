@@ -42,4 +42,15 @@ class EcoreTests extends AbstractTests {
 		
 		performTestBothDirections(revised, original)[newComparer]
 	}
+	
+	@Test
+	def void changeRefTest() {
+		val EPackage original = EcoreUtil.copy(EcorePackage.eINSTANCE)
+		val revised = EcoreUtil.copy(original)
+		
+		val class = revised.EClassifiers.findFirst[name=="EDataType"] as EClass
+		class.ESuperTypes.add(revised.EClassifiers.findFirst[name=="ETypedElement"] as EClass)
+		
+		performTestBothDirections(revised, original)[newComparer]
+	}
 }
