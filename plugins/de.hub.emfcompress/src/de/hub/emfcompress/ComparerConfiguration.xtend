@@ -20,7 +20,9 @@ interface ComparerConfiguration {
 	
 	/**
 	 * Callback that allows clients to provide custom match rules. 
+	 * The given match function can be used to recursively perform/check further
+	 * matches.
 	 * @returns true, if the given objects match.
 	 */
-	def boolean match(EObject original,EObject revised) 
+	def boolean match(EObject original, EObject revised, (EObject,EObject)=>boolean match) 
 }

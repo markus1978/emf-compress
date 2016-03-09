@@ -40,7 +40,7 @@ class AbstractTests {
 		val delta = comparer.compare(original, revised)
 		val patched = EcoreUtil.copy(original)
 		
-//		println(prettyPrint(delta))
+		println(prettyPrint(delta))
 		new Patcher().patch(patched, delta)	
 		assertEmfEquals(patched, revised)
 	}

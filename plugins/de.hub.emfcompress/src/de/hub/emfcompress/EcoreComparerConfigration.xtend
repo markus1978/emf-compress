@@ -24,7 +24,7 @@ class EcoreComparerConfigration implements ComparerConfiguration {
 		return original.eClass == revised.eClass && ENamedElement.isAssignableFrom(original.class)
 	}
 	
-	override boolean match(EObject original,EObject revised) {
+	override boolean match(EObject original,EObject revised, (EObject,EObject)=>boolean match) {
 		val nameFeature = EcorePackage.eINSTANCE.ENamedElement_Name
 		return original.eGet(nameFeature) == revised.eGet(nameFeature)
 	} 

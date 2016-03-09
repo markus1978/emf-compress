@@ -17,7 +17,7 @@ class DefaultComparerConfigration implements ComparerConfiguration {
 		return original.eClass == revised.eClass && original.eClass.getEStructuralFeature("name") != null
 	}
 	
-	override boolean match(EObject original,EObject revised) {
+	override boolean match(EObject original,EObject revised, (EObject,EObject)=>boolean match) {
 		val nameFeature = original.eClass.getEStructuralFeature("name")
 		return original.eGet(nameFeature) == revised.eGet(nameFeature)
 	} 

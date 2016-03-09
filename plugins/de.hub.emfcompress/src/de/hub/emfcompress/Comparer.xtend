@@ -25,6 +25,7 @@ class Comparer {
 	val extension ComparerConfiguration config 
 	
 	var ObjectDelta rootDelta = null
+	var EObject rootOriginal = null
 	val Map<EObject,ObjectDelta> objectDeltas = newHashMap
 	val Map<Pair<EObject,EStructuralFeature>, SettingDelta> settingDeltas = newHashMap	
 	val Map<Pair<EObject,EObject>, Boolean> matches = newHashMap
@@ -64,19 +65,20 @@ class Comparer {
 	 * configuration requires it, uses regular equals else. Recursively compares matched
 	 * objects.
 	 */
-	val equalizer = new EqualityHelper {		
+	val equalizer = new EqualityHelper {	
+		// TODO Can this break if there are circles? I think it could.	
 		override equals(EObject original, EObject revised) {
 			if (compareWithMatch(original, revised)) {
 				val pair = (original as EObject)->(revised as EObject)
 				val existingMatch = matches.get(pair)
 				if (existingMatch == null) {
-					val doMatch = match(revised, original)						
+					val doMatch = match(original, revised) [o,r|equals(o,r)]						
 					matches.put(pair, doMatch)
 					if (doMatch) {
 						put(original, revised)
 						put(revised, original)
 						compareSettings(original, revised)
-					}			
+					}
 					doMatch														
 				} else {						
 					existingMatch
@@ -115,6 +117,7 @@ class Comparer {
 	public def ObjectDelta compare(EObject original, EObject revised) {
 		reset
 		
+		rootOriginal = original
 		rootDelta.originalClass = original.eClass
 		// First we recursively compare all settings of the given objects.
 		// This might create deltas with references. 		
@@ -182,10 +185,11 @@ class Comparer {
 	 * does not already exist. Used for lazy delta construction.	  
 	 */
 	private def ObjectDelta objectDelta(EObject original) {
-		val container = original.eContainer
-		if (container == null) {
+		if (original == rootOriginal) {
 			return rootDelta
 		}
+		
+		val container = original.eContainer
 		
 		val existingDelta = objectDeltas.get(original) 
 		if (existingDelta == null) {			
@@ -210,31 +214,61 @@ class Comparer {
 	 * @returns true, if the given feature is already used during comparison.
 	 */
 	private def boolean derivedFromOpposite(EStructuralFeature feature) {
+		return derivedFromOpposite(feature, true)
+	}
+	
+	private def boolean derivedFromOpposite(EStructuralFeature feature, boolean check) {
 		switch(feature) {
-			EAttribute: false
+			EAttribute: return false
 			EReference: 
-				if (feature.EOpposite != null) {
-					val opposite = feature.EOpposite
-					if (!opposite.changeable || opposite.derived) {
-						false
-					} else if (opposite.containment) {
-						true
-					} else if (!feature.many && opposite.many) {
-						false // prefer the single valued feature
-					} else {
-						// use a unique but meaningless criteria
-						val featureHC = System.identityHashCode(feature)
-						val oppositeHC = System.identityHashCode(opposite)
-						if (featureHC == oppositeHC) { // extremely unlikely 
-							unreachable as Boolean // TODO compare by qualified name
-						} else {
-							featureHC > oppositeHC
-						}
-					}
+				if (feature.containment) {
+					return false
 				} else {
-					false
+					return if (feature.EOpposite != null) {
+						val opposite = feature.EOpposite
+						val result = if (!opposite.changeable || opposite.derived) {
+							false
+						} else if (opposite.containment) {
+							true
+						} else if (!feature.many && opposite.many) {
+							false // prefer the single valued feature
+						} else if (feature.many && !opposite.many) {
+							true
+						} else {
+							// use a unique but meaningless criteria
+							val featureHC = System.identityHashCode(feature)
+							val oppositeHC = System.identityHashCode(opposite)
+							if (featureHC == oppositeHC) { // extremely unlikely 
+								unreachable as Boolean // TODO compare by qualified name
+							} else {
+								featureHC > oppositeHC
+							}
+						}			
+						
+						if (check) {
+							precondition[result != derivedFromOpposite(opposite, false)]
+						}
+						
+						return result		
+					} else {
+						false
+					}					
 				}
-			default: unreachable as Boolean
+			default: return unreachable as Boolean
+		}		
+	}
+	
+	private def containment(EObject revisedObject) {
+		val matchingOriginalObject = equalizer.get(revisedObject)
+		return if (matchingOriginalObject == null) {
+			val revisedContainment = factory.createRevisedObjectContainment
+			revisedContainment.revisedObject = copier.copy(revisedObject)
+			revisedContainment
+		} else {
+			val originalContainment = factory.createOriginalObjectContainment
+			originalContainment.originalObject = matchingOriginalObject.objectDelta
+			precondition[originalContainment.originalObject != null]
+			originalContainment
 		}
 	}
 	
@@ -245,7 +279,6 @@ class Comparer {
 	 */
 	private def void compareSettings(EObject original, EObject revised) {
 		precondition[original.eClass == revised.eClass]
-		
 		val eClass = original.eClass	
 		for(feature:eClass.EAllStructuralFeatures) {
 			if (feature.changeable && !feature.derived && !feature.derivedFromOpposite && !feature.ignore) {
@@ -267,7 +300,9 @@ class Comparer {
 								EReference: {
 									if (feature.containment) {
 										val replacedObjectValues = factory.createContainedObjectsDelta
-										it.revised.lines.forEach[replacedObjectValues.revisedObjects += copier.copy(it as EObject)]
+										it.revised.lines.forEach[
+											replacedObjectValues.revisedObjectContainments += (it as EObject).containment
+										]
 										replacedObjectValues									
 									} else {
 										val replacedObjectValues = factory.createReferencedObjectsDelta
@@ -300,8 +335,8 @@ class Comparer {
 							EReference: {
 								if (feature.containment) {
 									val replacedObjectValues = factory.createContainedObjectsDelta
-									if (revisedValue != null) {
-										replacedObjectValues.revisedObjects += copier.copy(revisedValue as EObject)
+									if (revisedValue != null) {										
+										replacedObjectValues.revisedObjectContainments += (revisedValue as EObject).containment
 									}
 									replacedObjectValues
 								} else {

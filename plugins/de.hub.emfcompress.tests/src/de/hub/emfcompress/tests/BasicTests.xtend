@@ -118,7 +118,6 @@ class BasicTests extends AbstractTests {
 				}
 				
 				class B extends A {
-					
 				}
 			}
 		''')
@@ -200,6 +199,27 @@ class BasicTests extends AbstractTests {
 				}
 				
 				class B extends C {
+				}
+			}
+		''')
+		
+		performTestBothDirections(revised, original)[newComparer]
+	}
+	
+	@Test
+	def void addRemoveSingleReference() {
+		val original = ecore('''
+			package test : t='http://uri/1.0' {
+				class A {
+					operation op(): A[?];
+				}
+			}
+		''')
+		
+		val revised = ecore('''
+			package test : t='http://uri/1.0' {
+				class A {
+					operation op();
 				}
 			}
 		''')
