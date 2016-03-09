@@ -1,5 +1,6 @@
-package de.hub.emfcompress
+package de.hub.emfcompress.tests
 
+import de.hub.emfcompress.Comparer
 import org.eclipse.emf.ecore.EClass
 import org.eclipse.emf.ecore.EPackage
 import org.eclipse.emf.ecore.EStructuralFeature

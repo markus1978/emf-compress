@@ -1,4 +1,4 @@
-package de.hub.emfcompress
+package de.hub.emfcompress.tests
 
 import java.util.List
 import org.eclipse.emf.ecore.EObject

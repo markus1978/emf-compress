@@ -1,5 +1,10 @@
-package de.hub.emfcompress
+package de.hub.emfcompress.tests
 
+import de.hub.emfcompress.Comparer
+import de.hub.emfcompress.DObject
+import de.hub.emfcompress.DSetting
+import de.hub.emfcompress.EmfCompressPackage
+import de.hub.emfcompress.Patcher
 import java.io.File
 import org.apache.commons.io.FileUtils
 import org.eclipse.emf.ecore.EObject

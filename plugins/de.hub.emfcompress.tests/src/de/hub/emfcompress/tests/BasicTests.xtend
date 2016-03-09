@@ -1,5 +1,7 @@
-package de.hub.emfcompress
+package de.hub.emfcompress.tests
 
+import de.hub.emfcompress.Comparer
+import de.hub.emfcompress.Patcher
 import java.io.ByteArrayInputStream
 import org.eclipse.emf.common.util.URI
 import org.eclipse.emf.ecore.EAttribute
