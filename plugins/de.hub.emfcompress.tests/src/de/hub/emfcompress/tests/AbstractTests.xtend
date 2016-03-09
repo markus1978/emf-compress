@@ -1,10 +1,10 @@
 package de.hub.emfcompress.tests
 
 import de.hub.emfcompress.Comparer
-import de.hub.emfcompress.DObject
-import de.hub.emfcompress.DSetting
 import de.hub.emfcompress.EmfCompressPackage
+import de.hub.emfcompress.ObjectDelta
 import de.hub.emfcompress.Patcher
+import de.hub.emfcompress.SettingDelta
 import java.io.File
 import org.apache.commons.io.FileUtils
 import org.eclipse.emf.ecore.EObject
@@ -18,8 +18,8 @@ class AbstractTests {
 	protected def prettyPrint(EObject eObject) {
 		val printer = new EMFPrettyPrint {			
 			override protected additionalValueDescription(EObject container, EStructuralFeature feature, Object value) {
-				if (EmfCompressPackage.eINSTANCE.DSetting_FeatureID == feature) {
-					return ((container as DSetting).eContainer as DObject).originalClass.getEStructuralFeature(value as Integer).name
+				if (EmfCompressPackage.eINSTANCE.settingDelta_FeatureID == feature) {
+					return ((container as SettingDelta).eContainer as ObjectDelta).originalClass.getEStructuralFeature(value as Integer).name
 				}
 			}			
 		}

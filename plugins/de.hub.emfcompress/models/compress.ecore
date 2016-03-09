@@ -1,45 +1,43 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ecore:EPackage xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore" name="emfcompress" nsURI="http://de.hub/EmfCompress/1.0" nsPrefix="ec">
-  <eClassifiers xsi:type="ecore:EClass" name="DObject">
-    <eStructuralFeatures xsi:type="ecore:EReference" name="settings" upperBound="-1"
-        eType="#//DSetting" containment="true"/>
+  <eClassifiers xsi:type="ecore:EClass" name="ObjectDelta">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="settingDeltas" upperBound="-1"
+        eType="#//SettingDelta" containment="true"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="originalClass" eType="ecore:EClass ../../org.eclipse.emf.ecore/model/Ecore.ecore#//EClass"/>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="originalIndex" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EInt"/>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="transientOriginal" eType="ecore:EClass ../../org.eclipse.emf.ecore/model/Ecore.ecore#//EObject"
-        transient="true"/>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="proxy" eType="ecore:EClass ../../org.eclipse.emf.ecore/model/Ecore.ecore#//EObject"
+    <eStructuralFeatures xsi:type="ecore:EReference" name="originalProxy" eType="ecore:EClass ../../org.eclipse.emf.ecore/model/Ecore.ecore#//EObject"
         containment="true"/>
   </eClassifiers>
-  <eClassifiers xsi:type="ecore:EClass" name="DSetting">
-    <eStructuralFeatures xsi:type="ecore:EReference" name="deltas" upperBound="-1"
-        eType="#//DValues" containment="true"/>
+  <eClassifiers xsi:type="ecore:EClass" name="SettingDelta">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="valueDeltas" upperBound="-1"
+        eType="#//ValuesDelta" containment="true"/>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="featureID" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EInt"/>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="matches" upperBound="-1"
-        eType="#//DObject" containment="true"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="matchedObjects" upperBound="-1"
+        eType="#//ObjectDelta" containment="true"/>
   </eClassifiers>
-  <eClassifiers xsi:type="ecore:EClass" name="DValues">
-    <eStructuralFeatures xsi:type="ecore:EAttribute" name="start" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EInt"/>
-    <eStructuralFeatures xsi:type="ecore:EAttribute" name="end" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EInt"/>
+  <eClassifiers xsi:type="ecore:EClass" name="ValuesDelta" abstract="true">
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="originalStart" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EInt"/>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="originalEnd" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EInt"/>
   </eClassifiers>
-  <eClassifiers xsi:type="ecore:EClass" name="DDataValues" eSuperTypes="#//DValues">
-    <eStructuralFeatures xsi:type="ecore:EAttribute" name="values" upperBound="-1"
+  <eClassifiers xsi:type="ecore:EClass" name="DataValuesDelta" eSuperTypes="#//ValuesDelta">
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="revisedValues" upperBound="-1"
         eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EJavaObject"/>
   </eClassifiers>
-  <eClassifiers xsi:type="ecore:EClass" name="DContainedObjectValues" eSuperTypes="#//DValues">
-    <eStructuralFeatures xsi:type="ecore:EReference" name="values" upperBound="-1"
+  <eClassifiers xsi:type="ecore:EClass" name="ContainedObjectsDelta" eSuperTypes="#//ValuesDelta">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="revisedObjects" upperBound="-1"
         eType="ecore:EClass ../../org.eclipse.emf.ecore/model/Ecore.ecore#//EObject"
         containment="true"/>
   </eClassifiers>
-  <eClassifiers xsi:type="ecore:EClass" name="DReferencedObjectValues" eSuperTypes="#//DValues">
-    <eStructuralFeatures xsi:type="ecore:EReference" name="references" upperBound="-1"
-        eType="#//DObjectReference" containment="true"/>
+  <eClassifiers xsi:type="ecore:EClass" name="ReferencedObjectsDelta" eSuperTypes="#//ValuesDelta">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="revisedObjectReferences"
+        upperBound="-1" eType="#//ObjectReference" containment="true"/>
   </eClassifiers>
-  <eClassifiers xsi:type="ecore:EClass" name="DOriginalObjectReference" eSuperTypes="#//DObjectReference">
-    <eStructuralFeatures xsi:type="ecore:EReference" name="value" eType="#//DObject"/>
+  <eClassifiers xsi:type="ecore:EClass" name="OriginalObjectReference" eSuperTypes="#//ObjectReference">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="originalObject" eType="#//ObjectDelta"/>
   </eClassifiers>
-  <eClassifiers xsi:type="ecore:EClass" name="DRevisedObjectReference" eSuperTypes="#//DObjectReference">
-    <eStructuralFeatures xsi:type="ecore:EReference" name="value" eType="ecore:EClass ../../org.eclipse.emf.ecore/model/Ecore.ecore#//EObject"/>
+  <eClassifiers xsi:type="ecore:EClass" name="RevisedObjectReference" eSuperTypes="#//ObjectReference">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="revisedObject" eType="ecore:EClass ../../org.eclipse.emf.ecore/model/Ecore.ecore#//EObject"/>
   </eClassifiers>
-  <eClassifiers xsi:type="ecore:EClass" name="DObjectReference"/>
+  <eClassifiers xsi:type="ecore:EClass" name="ObjectReference" abstract="true"/>
 </ecore:EPackage>

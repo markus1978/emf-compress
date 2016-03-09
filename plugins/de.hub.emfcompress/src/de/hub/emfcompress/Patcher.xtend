@@ -7,34 +7,53 @@ import org.eclipse.emf.ecore.EObject
 import org.eclipse.emf.ecore.EStructuralFeature
 import org.eclipse.emf.ecore.util.EcoreUtil.Copier
 import org.eclipse.emf.ecore.EReference
+import java.util.Map
 
+/**
+ * A Patcher can be used to patch a given original with a delta that was required by comparison with a revised model earlier.
+ * The Patcher will modify the original.
+ * 
+ * A Patcher instance can only be used once.
+ */
 class Patcher {
-	val List<Pair<DRevisedObjectReference,Integer>> proxies = newArrayList	
+	val List<Pair<RevisedObjectReference,Integer>> proxies = newArrayList
+	val Map<ObjectDelta,EObject> patchedOriginals = newHashMap
+	
+	/**
+	 * A special EcoreUtils.Copier that replaces object delta proxies with the patched originals they represent.
+	 */	
 	val copier = new Copier {
 		override get(Object key) {			
 			val container = (key as EObject).eContainer
-			if (container instanceof DObject) {
-				return container.transientOriginal
+			if (container instanceof ObjectDelta) {
+				return patchedOriginals.get(container)
 			} else {
 				return super.get(key)	
 			}
 		}
 	}
 	
-	public def patch(EObject original, DObject delta) {
+	/**
+	 * Applies the given delta to the original. This will modify the original.
+	 */
+	public def patch(EObject original, ObjectDelta delta) {
+		// associate object deltas with the original objects they represent
 		saveOriginals(original, delta)				
-		patchContainment(original, delta)		
+		// recursively apply the patch
+		patchSettings(original, delta)
+		// copy references within the copied revised elements.		
 		copier.copyReferences
+		// resolve all proxies that have been found in the previous steps.
 		proxies.forEach[
 			val ref = it.key
 			val index = it.value
 			
-			val value = copier.get(ref.value)
+			val value = copier.get(ref.revisedObject)
 			precondition[value != null]
 			
-			val settingDelta = ref.eContainer.eContainer as DSetting
-			val objectDelta = settingDelta.eContainer as DObject
-			val referer = objectDelta.transientOriginal
+			val settingDelta = ref.eContainer.eContainer as SettingDelta
+			val objectDelta = settingDelta.eContainer as ObjectDelta
+			val referer = patchedOriginals.get(objectDelta)
 			val feature = objectDelta.originalClass.getEStructuralFeature(settingDelta.featureID)
 			
 			if (feature.many) {
@@ -46,11 +65,15 @@ class Patcher {
 		]
 	}
 	
-	private def void saveOriginals(EObject original, DObject objectDelta) {
-		objectDelta.transientOriginal = original
+	/**
+	 * Recursively populates a map that links object deltas to the original elements
+	 * they represent. This has to be done, before the original is modified.
+	 */
+	private def void saveOriginals(EObject original, ObjectDelta objectDelta) {
+		patchedOriginals.put(objectDelta, original)
 		val eClass = original.eClass
-		for (settingDelta:objectDelta.settings) {
-			val matches = settingDelta.matches
+		for (settingDelta:objectDelta.settingDeltas) {
+			val matches = settingDelta.matchedObjects
 			if (!matches.empty) {
 				val feature = eClass.getEStructuralFeature(settingDelta.featureID)
 				if (feature instanceof EReference) {
@@ -71,36 +94,36 @@ class Patcher {
 		}
 	}
 	
-	private def patchContainment(EObject original, DObject objectDelta) {	
+	private def patchSettings(EObject original, ObjectDelta objectDelta) {	
 		val eClass = objectDelta.originalClass
 		precondition[original.eClass == eClass]
-		for(settingDelta:objectDelta.settings) {
+		for(settingDelta:objectDelta.settingDeltas) {
 			val feature = eClass.getEStructuralFeature(settingDelta.featureID)
-			for(match:settingDelta.matches) {
-				match.patch(original, feature)	
+			for(match:settingDelta.matchedObjects) {
+				match.patchMatch(original, feature)	
 			}
-			settingDelta.deltas.patch(original, feature)
+			settingDelta.valueDeltas.patchValues(original, feature)
 		}
 	}
 	
-	private def void patch(DObject match, EObject original, EStructuralFeature feature) {
+	private def void patchMatch(ObjectDelta match, EObject original, EStructuralFeature feature) {
 		val value = if (feature.many) {
 			(original.eGet(feature) as List<EObject>).get(match.originalIndex)
 		} else {
 			original.eGet(feature) as EObject
 		}
-		value.patchContainment(match)
+		value.patchSettings(match)
 	}
 	
 	protected def EObject copy(EObject eObject) {
 		return copier.copy(eObject)
 	}
 	
-	private def EObject resolve(DObjectReference ref, int index) {
+	private def EObject resolve(ObjectReference ref, int index) {
 		return switch ref {
-			DOriginalObjectReference: ref.value.transientOriginal
-			DRevisedObjectReference: {
-				val eClass = ref.value.eClass
+			OriginalObjectReference: patchedOriginals.get(ref.originalObject)
+			RevisedObjectReference: {
+				val eClass = ref.revisedObject.eClass
 				val proxy = eClass.EPackage.EFactoryInstance.create(eClass)
 				proxies += ref -> index
 				proxy						
@@ -109,19 +132,19 @@ class Patcher {
 		}
 	}
 	
-	private def void patch(Iterable<DValues> deltas, EObject original, EStructuralFeature feature) {
+	private def void patchValues(Iterable<ValuesDelta> deltas, EObject original, EStructuralFeature feature) {
 		if (feature.many) {
 			val originalValues = original.eGet(feature) as List<Object>
 					
 			val List<Object> revisedValues = newArrayList
 			var originalIndex = 0
 			for(delta:deltas) {
-				originalValues.sub(originalIndex, delta.start).forEach[revisedValues+=it]
-				originalIndex = delta.end
+				originalValues.sub(originalIndex, delta.originalStart).forEach[revisedValues+=it]
+				originalIndex = delta.originalEnd
 				switch delta {
-					DDataValues: delta.values.iterator
-					DContainedObjectValues: delta.values.iterator.map[it.copy].forEach[revisedValues+=it]
-					DReferencedObjectValues: for(ref:delta.references) {
+					DataValuesDelta: delta.revisedValues.iterator
+					ContainedObjectsDelta: delta.revisedObjects.iterator.map[it.copy].forEach[revisedValues+=it]
+					ReferencedObjectsDelta: for(ref:delta.revisedObjectReferences) {
 						val value = ref.resolve(revisedValues.size)
 						revisedValues += value
 					}
@@ -135,12 +158,12 @@ class Patcher {
 		} else {
 			val delta = deltas.iterator.next
 			val patchedValue = switch(delta) {
-				DDataValues: if (delta.values.empty) null else delta.values.get(0)
-				DContainedObjectValues: if (delta.values.empty) null else delta.values.get(0).copy
-				DReferencedObjectValues: if (delta.references.empty) {
+				DataValuesDelta: if (delta.revisedValues.empty) null else delta.revisedValues.get(0)
+				ContainedObjectsDelta: if (delta.revisedObjects.empty) null else delta.revisedObjects.get(0).copy
+				ReferencedObjectsDelta: if (delta.revisedObjectReferences.empty) {
 					null
 				} else {
-					delta.references.get(0).resolve(-1)	
+					delta.revisedObjectReferences.get(0).resolve(-1)	
 				}
 			}
 			original.eSet(feature, patchedValue)
