@@ -1,5 +1,6 @@
 package de.hub.emfcompress
 
+import de.hub.emfcompress.Comparer.MyEqualityHelper
 import difflib.DiffUtils
 import java.util.List
 import java.util.Map
@@ -9,7 +10,6 @@ import org.eclipse.emf.ecore.EReference
 import org.eclipse.emf.ecore.EStructuralFeature
 import org.eclipse.emf.ecore.util.EcoreUtil.Copier
 import org.eclipse.emf.ecore.util.EcoreUtil.EqualityHelper
-import org.w3c.dom.EntityReference
 
 /**
  * A comparer can be used to compare to objects (and everything they contain). The comparison produces a 
@@ -104,12 +104,34 @@ class Comparer {
 				if (get(original) == revised) {
 					return true
 				}
+				
+				if (compareWithMatch(original, revised)) {
+					val pair = (original as EObject)->(revised as EObject)
+					val existingMatch = matches.get(pair)
+					if (existingMatch != null) {
+						if (!existingMatch) {
+							return false
+						} else {
+							return true
+						}
+					} 
+				}		
 								
 				if (original.eContainmentFeature == revised.eContainmentFeature) {
+					val containmentFeature = original.eContainingFeature
 					val originalContainer = original.eContainer
 					val revisedContainer = revised.eContainer
-					if (equals(originalContainer, revisedContainer, true)) {
-						return get(original) == revised
+					
+					if (containmentFeature.many) {
+						val originalIndex = (original.eGet(containmentFeature) as List<EObject>).indexOf(original)
+						val revisedIndex = (revised.eGet(containmentFeature) as List<EObject>).indexOf(revised)
+						if (originalIndex != revisedIndex) {
+							return false
+						}
+					}
+					
+					if (equals(originalContainer, revisedContainer, false)) {
+						return equals(original, revised, true)
 					} else {
 						return false
 					}
