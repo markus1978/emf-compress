@@ -212,6 +212,49 @@ class Comparer {
 		return rootDelta		
 	}
 	
+	val Map<EObject,EObject> matches2 = newHashMap
+	
+	public def boolean match(EObject original, EObject revised) {
+		if (original.eClass != revised.eClass) {
+			return false	
+		}
+		
+		return if (match(original, revised) [o,r|match(o,r)]) {
+			matches2.put(original,revised)
+			val eClass = original.eClass
+			val matchReferences = eClass.EAllReferences.filter[
+				containment && compareWithMatch(eClass, it)
+			]
+			for (matchReference:matchReferences) {
+				val List<EObject> originalValues = original.eGetList(matchReference)
+				val List<EObject> revisedValues = revised.eGetList(matchReference)
+				val patch = DiffUtils.diff(originalValues, revisedValues) [comparedOriginal,comparedRevised|
+					match(comparedOriginal,comparedRevised) 
+				]
+				patch.deltas.forEach[
+					val replacedObjectValues = factory.createContainedObjectsDelta
+					it.revised.lines.forEach[
+						replacedObjectValues.revisedObjectContainments += it.containment																		
+					]
+					replacedObjectValues.originalStart = it.original.position
+					replacedObjectValues.originalEnd = it.original.position + it.original.size
+					original.settingDelta(matchReference).valueDeltas += replacedObjectValues								
+				]				
+			}	
+			true	
+		} else {
+			false
+		}
+	}
+	
+	private def <T> List<T> eGetList(EObject container, EStructuralFeature feature) {
+		return if (feature.many) {
+			container.eGet(feature) as List<T>
+		} else {
+			#[container.eGet(feature) as T]	
+		}
+	}
+	
 	private def void handleReferences() {
 		// handle references in references
 		val List<Pair<ReferencedObjectsDelta, List<EObject>>> references = newArrayList
