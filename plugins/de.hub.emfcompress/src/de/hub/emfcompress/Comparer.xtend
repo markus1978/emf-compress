@@ -141,10 +141,10 @@ class Comparer {
 			
 			val List<ValuesDelta> valueDeltas = newArrayList
 			if (feature.many) {
-				val originalValues = original.eGet(feature) as List<Object>
-					val revisedValues = revised.eGet(feature) as List<Object>
+				val originalValues = original.eGet(feature) as List<EObject>
+					val revisedValues = revised.eGet(feature) as List<EObject>
 					val patch = DiffUtils.diff(originalValues, revisedValues) [comparedOriginal,comparedRevised|
-						equalizer.get(comparedOriginal) == comparedRevised 
+						compareValues(comparedOriginal, comparedRevised,feature) 
 					]
 					if (!patch.deltas.empty) {
 						patch.deltas.forEach[
@@ -163,7 +163,7 @@ class Comparer {
 			} else {
 				val originalValue = original.eGet(feature) as EObject
 				val revisedValue = revised.eGet(feature) as EObject
-				if (equalizer.get(originalValue) != revisedValue) {
+				if (!compareValues(originalValue, revisedValue, feature)) {
 					val replacedObjectValues = factory.createReferencedObjectsDelta
 					if (revisedValue != null) {
 						val referencedValues = newArrayList(revisedValue as EObject)									
