@@ -9,6 +9,7 @@ import org.eclipse.emf.ecore.EReference
 import org.eclipse.emf.ecore.EStructuralFeature
 import org.eclipse.emf.ecore.util.EcoreUtil.Copier
 import org.eclipse.emf.ecore.util.EcoreUtil.EqualityHelper
+import org.w3c.dom.EntityReference
 
 /**
  * A comparer can be used to compare to objects (and everything they contain). The comparison produces a 
@@ -60,14 +61,22 @@ class Comparer {
 			}
 		}		
 	}
+	
+	static abstract class MyEqualityHelper extends EqualityHelper {
+		public abstract def boolean equals(EObject original, EObject revised, boolean isReferenceCompare);
+	}
+	
 	/**
 	 * A special EcoreUtils.EqualityHelper. It caches results, it tries to match if comparer
 	 * configuration requires it, uses regular equals else. Recursively compares matched
 	 * objects.
 	 */
-	val equalizer = new EqualityHelper {	
-		// TODO Can this break if there are circles? I think it could. This would be solved if containment is matched/equals and references later just check
-		override equals(EObject original, EObject revised) {
+	val equalizer = new MyEqualityHelper {
+		private def boolean equalsContainment(EObject original, EObject revised) {
+			if (get(original) == revised) {
+				return true
+			}
+			
 			if (compareWithMatch(original, revised)) {
 				val pair = (original as EObject)->(revised as EObject)
 				val existingMatch = matches.get(pair)
@@ -84,8 +93,58 @@ class Comparer {
 					existingMatch
 				}
 			} else {
-				super.equals(original, revised)
+				super.equals(original, revised)					
+			}		
+		}	
+
+		override equals(EObject original, EObject revised, boolean isContainmentCompare) {
+			if (isContainmentCompare) {
+				return equalsContainment(original, revised)							
+			} else {
+				if (get(original) == revised) {
+					return true
+				}
+								
+				if (original.eContainmentFeature == revised.eContainmentFeature) {
+					val originalContainer = original.eContainer
+					val revisedContainer = revised.eContainer
+					if (equals(originalContainer, revisedContainer, true)) {
+						return get(original) == revised
+					} else {
+						return false
+					}
+				} else {
+					return false
+				}
 			}						
+		}
+		
+		override equals(EObject eObject1, EObject eObject2) {
+			return equals(eObject1, eObject2, true)
+		}
+		
+		override protected haveEqualReference(EObject eObject1, EObject eObject2, EReference reference) {
+			val value1 = eObject1.eGet(reference);
+      		val value2 = eObject2.eGet(reference);
+
+      		if (reference.many) 
+          		equals(value1 as List<EObject>, value2 as List<EObject>, reference)
+          	else
+          		equals(value1 as EObject, value2 as EObject, reference.containment)
+		}
+		
+		private def boolean equals(List<EObject> list1, List<EObject> list2, EReference reference) {
+			val size = list1.size();
+  			if (size != list2.size()) {
+  				false
+  			} else {
+		      	for (i:0..<size) {
+		      		if (!equals(list1.get(i), list2.get(i), reference.containment)) {
+		      			return false
+		      		}
+		      	}
+		      	true			      	
+		    }			
 		}
 	}
 //	val List<Pair<ReferencedObjectsDelta, List<EObject>>> references = newArrayList
@@ -122,7 +181,7 @@ class Comparer {
 		rootDelta.originalClass = original.eClass
 		// First we recursively compare all settings of the given objects.
 		// This might create deltas with references. 		
-		compareSettings(original, revised)
+		equalizer.equals(original, revised, true)
 		// References to elements of the original model (created in the previous step)
 		// have been and are now added/replaced as/with ObjectDeltas and corresponding
 		// proxies.
@@ -432,7 +491,7 @@ class Comparer {
 				}
 				EReference: {
 					if (equalizer.get(original) != revised) {
-						return equalizer.equals(original as EObject, revised as EObject)
+						return equalizer.equals(original as EObject, revised as EObject, feature.containment)
 					} else {
 						true
 					}					

@@ -17,6 +17,7 @@ import org.eclipse.ocl.xtext.oclinecore.OCLinEcoreStandaloneSetup
 import org.eclipse.ocl.xtext.oclinecore.utilities.OCLinEcoreCSResource
 import org.junit.Before
 import org.junit.Test
+import de.hub.emfcompress.DefaultComparerConfigration
 
 class BasicTests extends AbstractTests {
 	
@@ -62,15 +63,19 @@ class BasicTests extends AbstractTests {
  		return root
 	}
 	
-	private def newComparer() {
+	private def newEcoreComparer() {
 		return new Comparer(EcoreComparerConfigration.instance)
+	}
+	
+	private def newDefaultComparer() {
+		return new Comparer(DefaultComparerConfigration.instance)
 	}
 	
 	def void performListTest(String[] originalNames, String[] revisedNames) {
 		val original = createClass("aClass", originalNames.map[createAttribute])
 		val revised = createClass("aClass", revisedNames.map[createAttribute])
 		
-		val delta = newComparer.compare(original, revised)
+		val delta = newEcoreComparer.compare(original, revised)
 		
 		new Patcher().patch(original, delta)		
 		assertEmfEquals(revised, original)
@@ -133,7 +138,7 @@ class BasicTests extends AbstractTests {
 			}
 		''')
 		
-		performTestBothDirections(revised, original)[newComparer]
+		performTestBothDirections(revised, original)[newEcoreComparer]
 	}
 	
 	@Test
@@ -160,7 +165,7 @@ class BasicTests extends AbstractTests {
 			}
 		''')
 		
-		performTestBothDirections(revised, original)[newComparer]
+		performTestBothDirections(revised, original)[newEcoreComparer]
 	}
 	
 	@Test
@@ -189,7 +194,7 @@ class BasicTests extends AbstractTests {
 			}
 		''')
 		
-		performTestBothDirections(revised, original)[newComparer]
+		performTestBothDirections(revised, original)[newEcoreComparer]
 	}
 	
 	@Test
@@ -214,7 +219,7 @@ class BasicTests extends AbstractTests {
 			}
 		''')
 		
-		performTestBothDirections(revised, original)[newComparer]
+		performTestBothDirections(revised, original)[newEcoreComparer]
 	}
 	
 	@Test
@@ -235,7 +240,7 @@ class BasicTests extends AbstractTests {
 			}
 		''')
 		
-		performTestBothDirections(revised, original)[newComparer]
+		performTestBothDirections(revised, original)[newEcoreComparer]
 	}
 	
 	@Test
@@ -264,6 +269,6 @@ class BasicTests extends AbstractTests {
 				}
 			}
 		''')
-		performTestBothDirections(revised, original)[newComparer]
+		performTestBothDirections(revised, original)[newDefaultComparer]
 	}
 }
