@@ -27,5 +27,6 @@
 	<dependencies>
 		<dependency org="com.googlecode.java-diff-utils" name="diffutils" rev="1.3.0"/>
 		<dependency org="commons-io" name="commons-io" rev="2.4"/>
+		<dependency org="org.jparsec" name="jparsec" rev="2.2.1"/>
 	</dependencies>
 </ivy-module>

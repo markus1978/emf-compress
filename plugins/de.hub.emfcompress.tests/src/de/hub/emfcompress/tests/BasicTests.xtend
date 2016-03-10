@@ -7,9 +7,11 @@ import java.io.ByteArrayInputStream
 import org.eclipse.emf.common.util.URI
 import org.eclipse.emf.ecore.EAttribute
 import org.eclipse.emf.ecore.EObject
+import org.eclipse.emf.ecore.EPackage
 import org.eclipse.emf.ecore.EcoreFactory
 import org.eclipse.emf.ecore.resource.Resource
 import org.eclipse.emf.ecore.resource.Resource.Factory
+import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl
 import org.eclipse.ocl.pivot.utilities.OCL
 import org.eclipse.ocl.xtext.oclinecore.OCLinEcoreStandaloneSetup
 import org.eclipse.ocl.xtext.oclinecore.utilities.OCLinEcoreCSResource
@@ -17,6 +19,8 @@ import org.junit.Before
 import org.junit.Test
 
 class BasicTests extends AbstractTests {
+	
+	var EMFParser testModelParser = null
 	
 	private def createAttribute(String name) {
 		val content = EcoreFactory.eINSTANCE.createEAttribute
@@ -41,6 +45,13 @@ class BasicTests extends AbstractTests {
 				return resource
 			}			
 		})
+		
+		val testMetaModel = new ResourceSetImpl().getResource(URI.createURI("model/test.ecore"), true).contents.get(0) as EPackage
+		testModelParser = new EMFParser(testMetaModel) 
+	}
+	
+	private def EObject testModel(CharSequence testModelStr) {
+		return testModelParser.parse(testModelStr)
 	}
 	
 	private def EObject ecore(String ecoreStr) {
@@ -224,6 +235,35 @@ class BasicTests extends AbstractTests {
 			}
 		''')
 		
+		performTestBothDirections(revised, original)[newComparer]
+	}
+	
+	@Test
+	def void testReplacedReference() {
+		val original = testModel('''
+			TC root {
+				contents = TC replaceContainer {
+					contents = TC replaced {
+						contents = TC referenced
+					}
+				}
+				contents = TC refContainer {
+					refs = @referenced
+				}
+			}
+		''')
+		val revised = testModel('''
+			TC root {
+				contents = TC replaceContainer {
+					contents = TC renamed {
+						contents = TC referenced
+					}
+				}
+				contents = TC refContainer {
+					refs = @referenced
+				}
+			}
+		''')
 		performTestBothDirections(revised, original)[newComparer]
 	}
 }

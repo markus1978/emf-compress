@@ -41,6 +41,10 @@ class Patcher {
 		patchedOriginals.clear
 	}
 	
+	public def EObject getPatchedOriginal(Object delta) {
+		return patchedOriginals.get(delta)
+	}
+	
 	/**
 	 * Applies the given delta to the original. This will modify the original.
 	 */
@@ -63,7 +67,7 @@ class Patcher {
 			
 			val settingDelta = ref.eContainer.eContainer as SettingDelta
 			val objectDelta = settingDelta.eContainer as ObjectDelta
-			val referer = patchedOriginals.get(objectDelta)
+			val referer = objectDelta.patchedOriginal
 			val feature = objectDelta.originalClass.getEStructuralFeature(settingDelta.featureID)
 			
 			if (feature.many) {
@@ -133,7 +137,7 @@ class Patcher {
 	
 	private def EObject resolve(ObjectReference ref, int index) {
 		return switch ref {
-			OriginalObjectReference: patchedOriginals.get(ref.originalObject)
+			OriginalObjectReference: ref.originalObject.patchedOriginal
 			RevisedObjectReference: {
 				val eClass = ref.revisedObject.eClass
 				val proxy = eClass.EPackage.EFactoryInstance.create(eClass)
@@ -162,7 +166,7 @@ class Patcher {
 						switch it {
 							RevisedObjectContainment: it.revisedObject.copy
 							OriginalObjectContainment: {
-								val originalValue = patchedOriginals.get(it.originalObject)
+								val originalValue = it.originalObject.patchedOriginal
 								addedOriginalValues += originalValue
 								originalValue								
 							}
@@ -193,7 +197,7 @@ class Patcher {
 					val revisedObject = delta.revisedObjectContainments.get(0)
 					switch revisedObject {
 						RevisedObjectContainment: revisedObject.revisedObject.copy
-						OriginalObjectContainment: patchedOriginals.get(revisedObject.originalObject) 
+						OriginalObjectContainment: revisedObject.originalObject.patchedOriginal 
 						default: unreachable as Object
 					}
 				}

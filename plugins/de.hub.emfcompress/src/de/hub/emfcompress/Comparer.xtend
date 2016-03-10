@@ -66,7 +66,7 @@ class Comparer {
 	 * objects.
 	 */
 	val equalizer = new EqualityHelper {	
-		// TODO Can this break if there are circles? I think it could.	
+		// TODO Can this break if there are circles? I think it could. This would be solved if containment is matched/equals and references later just check
 		override equals(EObject original, EObject revised) {
 			if (compareWithMatch(original, revised)) {
 				val pair = (original as EObject)->(revised as EObject)
@@ -88,7 +88,8 @@ class Comparer {
 			}						
 		}
 	}
-	val List<Pair<ReferencedObjectsDelta, List<EObject>>> references = newArrayList
+//	val List<Pair<ReferencedObjectsDelta, List<EObject>>> references = newArrayList
+	val List<Pair<EObject,Pair<EObject,EReference>>> referenceSettings = newArrayList
 	
 	new(ComparerConfiguration config, EmfCompressFactory factory) {
 		this.factory = factory
@@ -106,7 +107,7 @@ class Comparer {
 		objectDeltas.clear
 		settingDeltas.clear
 		matches.clear
-		references.clear
+		referenceSettings.clear
 		rootDelta = factory.createObjectDelta
 	}
 	
@@ -132,6 +133,51 @@ class Comparer {
 	
 	private def void handleReferences() {
 		// handle references in references
+		val List<Pair<ReferencedObjectsDelta, List<EObject>>> references = newArrayList
+		for(refernceSetting:referenceSettings) {
+			val original = refernceSetting.key
+			val revised = refernceSetting.value.key
+			val feature = refernceSetting.value.value
+			
+			val List<ValuesDelta> valueDeltas = newArrayList
+			if (feature.many) {
+				val originalValues = original.eGet(feature) as List<Object>
+					val revisedValues = revised.eGet(feature) as List<Object>
+					val patch = DiffUtils.diff(originalValues, revisedValues) [comparedOriginal,comparedRevised|
+						equalizer.get(comparedOriginal) == comparedRevised 
+					]
+					if (!patch.deltas.empty) {
+						patch.deltas.forEach[
+							val replacedObjectValues = factory.createReferencedObjectsDelta
+							replacedObjectValues.originalStart = it.original.position
+							replacedObjectValues.originalEnd = it.original.position + it.original.size
+							val referencedValues = newArrayList
+							it.revised.lines.forEach[
+								referencedValues.add(it as EObject)
+							]
+							references.add(replacedObjectValues->referencedValues)
+							
+							valueDeltas += replacedObjectValues
+						]					
+					}
+			} else {
+				val originalValue = original.eGet(feature) as EObject
+				val revisedValue = revised.eGet(feature) as EObject
+				if (equalizer.get(originalValue) != revisedValue) {
+					val replacedObjectValues = factory.createReferencedObjectsDelta
+					if (revisedValue != null) {
+						val referencedValues = newArrayList(revisedValue as EObject)									
+						references.add(replacedObjectValues->referencedValues)									
+					}
+					valueDeltas += replacedObjectValues
+				}
+			}
+			if (!valueDeltas.empty) {
+				val settingDelta = original.settingDelta(feature)					
+				settingDelta.valueDeltas += valueDeltas
+			}
+		}
+		
 		for(referenceDelta:references) {
 			val delta = referenceDelta.key
 			val values = referenceDelta.value
@@ -290,7 +336,7 @@ class Comparer {
 						compareValues(comparedOriginal,comparedRevised,feature) 
 					]
 					if (!patch.deltas.empty) {
-						valueDeltas += patch.deltas.map[
+						patch.deltas.forEach[
 							val replacedValues = switch feature {
 								EAttribute: {
 									val replacedDataValues = factory.createDataValuesDelta
@@ -305,32 +351,36 @@ class Comparer {
 										]
 										replacedObjectValues									
 									} else {
-										val replacedObjectValues = factory.createReferencedObjectsDelta
-										val referencedValues = newArrayList
-										it.revised.lines.forEach[
-											referencedValues.add(it as EObject)
-										]
-										references.add(replacedObjectValues->referencedValues)
-										replacedObjectValues
+										referenceSettings += original -> (revised -> feature)
+										null
+//										val replacedObjectValues = factory.createReferencedObjectsDelta
+//										val referencedValues = newArrayList
+//										it.revised.lines.forEach[
+//											referencedValues.add(it as EObject)
+//										]
+//										references.add(replacedObjectValues->referencedValues)
+//										replacedObjectValues
 									}
 								}
 								default: unreachable as ValuesDelta
 							}
-							replacedValues.originalStart = it.original.position
-							replacedValues.originalEnd = it.original.position + it.original.size
-							return replacedValues
+							if (replacedValues != null) {
+								replacedValues.originalStart = it.original.position
+								replacedValues.originalEnd = it.original.position + it.original.size
+								valueDeltas += replacedValues								
+							}
 						]				
 					}
 				} else {
 					val revisedValue = revised.eGet(feature)
 					if (!compareValues(original.eGet(feature), revisedValue, feature)) {
-						valueDeltas += switch feature {
+						switch feature {
 							EAttribute: {
 								val replacedDataValues = factory.createDataValuesDelta
 								if (revisedValue != null) {
 									replacedDataValues.revisedValues += revisedValue
 								}
-								replacedDataValues
+								valueDeltas += replacedDataValues
 							}
 							EReference: {
 								if (feature.containment) {
@@ -338,14 +388,15 @@ class Comparer {
 									if (revisedValue != null) {										
 										replacedObjectValues.revisedObjectContainments += (revisedValue as EObject).containment
 									}
-									replacedObjectValues
+									valueDeltas += replacedObjectValues
 								} else {
-									val replacedObjectValues = factory.createReferencedObjectsDelta
-									if (revisedValue != null) {
-										val referencedValues = newArrayList(revisedValue as EObject)									
-										references.add(replacedObjectValues->referencedValues)									
-									}
-									replacedObjectValues
+									referenceSettings += original -> (revised -> feature)
+//									val replacedObjectValues = factory.createReferencedObjectsDelta
+//									if (revisedValue != null) {
+//										val referencedValues = newArrayList(revisedValue as EObject)									
+//										references.add(replacedObjectValues->referencedValues)									
+//									}
+//									replacedObjectValues
 								}
 							}
 							default: unreachable as ValuesDelta

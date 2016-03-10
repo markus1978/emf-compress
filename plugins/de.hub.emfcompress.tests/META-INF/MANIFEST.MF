@@ -12,5 +12,9 @@ Require-Bundle: de.hub.emfcompress,
  org.eclipse.xtend.lib.macro,
  org.eclipse.ocl.xtext.oclinecore;bundle-version="1.0.0",
  org.apache.log4j;bundle-version="1.2.15"
-Bundle-ClassPath: lib/jars/commons-io-2.4.jar,lib/jars/diffutils-1.3.0.jar,.
+Bundle-ClassPath: lib/jars/commons-io-2.4.jar,
+ lib/jars/diffutils-1.3.0.jar,
+ .,
+ lib/jars/cglib-nodep-2.1_3.jar,
+ lib/jars/jparsec-2.2.1.jar
 
