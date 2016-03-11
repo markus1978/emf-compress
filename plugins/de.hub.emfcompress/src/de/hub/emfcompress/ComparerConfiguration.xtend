@@ -2,6 +2,8 @@ package de.hub.emfcompress
 
 import org.eclipse.emf.ecore.EObject
 import org.eclipse.emf.ecore.EStructuralFeature
+import org.eclipse.emf.ecore.EReference
+import org.eclipse.emf.ecore.EClass
 
 interface ComparerConfiguration {
 	/**
@@ -16,7 +18,7 @@ interface ComparerConfiguration {
 	 * compared to match or should be compared to equal.
 	 * @returns true, if the given objects should be matched and not equaled.
 	 */
-	def boolean compareWithMatch(EObject original,EObject revised)
+	def boolean compareWithMatch(EClass eClass, EReference reference)
 	
 	/**
 	 * Callback that allows clients to provide custom match rules. 

@@ -8,6 +8,7 @@ import java.util.Map
 import org.eclipse.emf.ecore.EObject
 import org.eclipse.emf.ecore.EReference
 import org.eclipse.emf.ecore.EStructuralFeature
+import org.eclipse.emf.ecore.resource.impl.ResourceImpl
 import org.eclipse.emf.ecore.util.EcoreUtil
 import org.eclipse.emf.ecore.util.EcoreUtil.Copier
 
@@ -18,8 +19,13 @@ import org.eclipse.emf.ecore.util.EcoreUtil.Copier
  * A Patcher instance can only be used once.
  */
 class Patcher {
+	val Trash trash
 	val List<Pair<RevisedObjectReference,Integer>> proxies = newArrayList
-	val Map<ObjectDelta,EObject> patchedOriginals = newHashMap
+	val Map<ObjectDelta, EObject> patchedOriginals = newHashMap 
+	
+	new(EmfCompressFactory factory) {
+		trash = factory.createTrash
+	}
 	
 	/**
 	 * A special EcoreUtils.Copier that replaces object delta proxies with the patched originals they represent.
@@ -27,15 +33,17 @@ class Patcher {
 	val copier = new Copier {
 		override get(Object key) {			
 			val container = (key as EObject).eContainer
-			if (container instanceof ObjectDelta) {
-				return patchedOriginals.get(container)
+			val result = if (container instanceof ObjectDelta) {
+				patchedOriginals.get(container)
 			} else {
-				return super.get(key)	
+				super.get(key)	
 			}
+			return result
 		}
 	}
 	
 	private def reset() {
+		trash.contents.forEach[EcoreUtil.delete(it)]
 		copier.clear
 		proxies.clear
 		patchedOriginals.clear
@@ -49,10 +57,13 @@ class Patcher {
 	 * Applies the given delta to the original. This will modify the original.
 	 */
 	public def patch(EObject original, ObjectDelta delta) {
+		precondition[original.eContainer == null]
+		
 		reset
 		
 		// associate object deltas with the original objects they represent
-		saveOriginals(original, delta)				
+		saveOriginals(original, delta)		
+		precondition[patchedOriginals.get(delta) == original]		
 		// recursively apply the patch
 		patchSettings(original, delta)
 		// copy references within the copied revised elements.		
@@ -77,6 +88,17 @@ class Patcher {
 				referer.eSet(feature, value)
 			}
 		]
+		
+		// add trash and patched original to a resource, so that delete removes cross references properly
+		val resource = new ResourceImpl
+		resource.contents += original
+		resource.contents += trash
+		
+		for(contents:trash.contents.iterator.toList) {
+			EcoreUtil.delete(contents, true)
+		}
+		
+		resource.contents.clear
 	}
 	
 	/**
@@ -184,7 +206,7 @@ class Patcher {
 			
 			if (feature instanceof EReference) {
 				if (feature.containment) {				
-					deletedOriginalValues.filter[!addedOriginalValues.contains(it)].forEach[EcoreUtil.delete(it as EObject, true)]				
+					deletedOriginalValues.filter[!addedOriginalValues.contains(it)].forEach[trash.contents += it as EObject]				
 				}	
 			}
 			originalValues.clear			
@@ -211,7 +233,7 @@ class Patcher {
 				if (feature.containment) {
 					val oldValue = original.eGet(feature)
 					if (oldValue != null && oldValue != patchedValue) {
-						EcoreUtil.delete(oldValue as EObject, true)
+						trash.contents += oldValue as EObject
 					}
 				}
 			}

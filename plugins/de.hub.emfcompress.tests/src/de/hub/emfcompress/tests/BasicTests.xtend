@@ -1,23 +1,25 @@
 package de.hub.emfcompress.tests
 
 import de.hub.emfcompress.Comparer
+import de.hub.emfcompress.DefaultComparerConfigration
 import de.hub.emfcompress.EcoreComparerConfigration
+import de.hub.emfcompress.EmfCompressFactory
 import de.hub.emfcompress.Patcher
+import de.hub.emfcompress.tests.test.TestPackage
 import java.io.ByteArrayInputStream
 import org.eclipse.emf.common.util.URI
 import org.eclipse.emf.ecore.EAttribute
+import org.eclipse.emf.ecore.EClass
 import org.eclipse.emf.ecore.EObject
-import org.eclipse.emf.ecore.EPackage
+import org.eclipse.emf.ecore.EReference
 import org.eclipse.emf.ecore.EcoreFactory
 import org.eclipse.emf.ecore.resource.Resource
 import org.eclipse.emf.ecore.resource.Resource.Factory
-import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl
 import org.eclipse.ocl.pivot.utilities.OCL
 import org.eclipse.ocl.xtext.oclinecore.OCLinEcoreStandaloneSetup
 import org.eclipse.ocl.xtext.oclinecore.utilities.OCLinEcoreCSResource
 import org.junit.Before
 import org.junit.Test
-import de.hub.emfcompress.DefaultComparerConfigration
 
 class BasicTests extends AbstractTests {
 	
@@ -47,8 +49,7 @@ class BasicTests extends AbstractTests {
 			}			
 		})
 		
-		val testMetaModel = new ResourceSetImpl().getResource(URI.createURI("model/test.ecore"), true).contents.get(0) as EPackage
-		testModelParser = new EMFParser(testMetaModel) 
+		testModelParser = new EMFParser(TestPackage.eINSTANCE) 
 	}
 	
 	private def EObject testModel(CharSequence testModelStr) {
@@ -68,7 +69,11 @@ class BasicTests extends AbstractTests {
 	}
 	
 	private def newDefaultComparer() {
-		return new Comparer(DefaultComparerConfigration.instance)
+		return new Comparer(new DefaultComparerConfigration {						
+			override compareWithMatch(EClass eClass, EReference reference) {
+				return reference == TestPackage.eINSTANCE.m_MatchContents
+			}			
+		})
 	}
 	
 	def void performListTest(String[] originalNames, String[] revisedNames) {
@@ -77,8 +82,13 @@ class BasicTests extends AbstractTests {
 		
 		val delta = newEcoreComparer.compare(original, revised)
 		
-		new Patcher().patch(original, delta)		
-		assertEmfEquals(revised, original)
+		new Patcher(EmfCompressFactory.eINSTANCE).patch(original, delta)	
+		try {	
+			assertEmfEquals(revised, original)		
+		} catch (Throwable e) {
+			println(prettyPrint(delta))
+			throw e
+		}
 	}
 	
 	@Test
@@ -246,29 +256,51 @@ class BasicTests extends AbstractTests {
 	@Test
 	def void testReplacedReference() {
 		val original = testModel('''
-			TC root {
-				contents = TC replaceContainer {
-					contents = TC replaced {
-						contents = TC referenced
+			M root {
+				matchContents = M replaceContainer {
+					matchContents = M replaced {
+						matchContents = M referenced
 					}
 				}
-				contents = TC refContainer {
+				matchContents = M refContainer {
 					refs = @referenced
 				}
 			}
 		''')
 		val revised = testModel('''
-			TC root {
-				contents = TC replaceContainer {
-					contents = TC renamed {
-						contents = TC referenced
+			M root {
+				matchContents = M replaceContainer {
+					matchContents = M renamed {
+						matchContents = M referenced
 					}
 				}
-				contents = TC refContainer {
+				matchContents = M refContainer {
 					refs = @referenced
 				}
 			}
 		''')
+		performTestBothDirections(revised, original)[newDefaultComparer]
+	}
+	
+	@Test
+	def void testIndirectlyReplacedReference() {
+		val model = '''
+			M root {
+				matchContents = M replaced
+				matchContents = M refererContainer {
+					eqContents = E eq {
+						eqContents = E referer {
+							refs = @replaced
+						}
+					}
+				}
+				matchContents = M indirectReferer {
+					refs = @eq
+				}
+			}
+		'''
+		val original = testModel(model)	
+		val revised = testModel(model.replace("replaced", "renamed"))
 		performTestBothDirections(revised, original)[newDefaultComparer]
 	}
 }

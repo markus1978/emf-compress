@@ -4,6 +4,7 @@ import java.util.List
 import org.eclipse.emf.ecore.EObject
 import org.eclipse.emf.ecore.EReference
 import org.eclipse.emf.ecore.EStructuralFeature
+import java.util.Map
 
 class EMFPrettyPrint {
 	
@@ -11,8 +12,22 @@ class EMFPrettyPrint {
 		return null
 	}
 	
+	var i = 0
+	val Map<EObject,Integer> ids = newHashMap
+	
+	def int id(EObject eObject) {
+		val existingId = ids.get(eObject)
+		if (existingId != null) {
+			return existingId
+		} else {
+			val newId = Integer.valueOf(i++)
+			ids.put(eObject, newId)
+			return newId
+		}
+	}
+	
 	def signature(EObject eObject) {
-		return '''«eObject.name»[«eObject.eClass.name»]'''
+		return '''«eObject.name»:«eObject.id»[«eObject.eClass.name»]'''
 	}
 	
 	public def String prettyPrint(EObject eObject) {
@@ -25,7 +40,7 @@ class EMFPrettyPrint {
 			eObject.signature
 		} else {
 			'''
-				@«eObject.name» [«eObject.eClass.name»] {
+				@«eObject.signature» {
 					«FOR feature:features»
 						«prettyPrint(eObject,feature)»
 					«ENDFOR»

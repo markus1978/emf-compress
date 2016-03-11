@@ -1,6 +1,7 @@
 package de.hub.emfcompress
 
-import de.hub.emfcompress.Comparer.MyEqualityHelper
+import de.hub.emfcompress.internal.ContextualEqualityHelper
+import de.hub.emfcompress.internal.EmfCompressModel
 import difflib.DiffUtils
 import java.util.List
 import java.util.Map
@@ -9,7 +10,6 @@ import org.eclipse.emf.ecore.EObject
 import org.eclipse.emf.ecore.EReference
 import org.eclipse.emf.ecore.EStructuralFeature
 import org.eclipse.emf.ecore.util.EcoreUtil.Copier
-import org.eclipse.emf.ecore.util.EcoreUtil.EqualityHelper
 
 /**
  * A comparer can be used to compare to objects (and everything they contain). The comparison produces a 
@@ -22,14 +22,10 @@ import org.eclipse.emf.ecore.util.EcoreUtil.EqualityHelper
  */
 class Comparer {
 	
+	var extension EmfCompressModel model = null
+	
 	val EmfCompressFactory factory
 	val extension ComparerConfiguration config 
-	
-	var ObjectDelta rootDelta = null
-	var EObject rootOriginal = null
-	val Map<EObject,ObjectDelta> objectDeltas = newHashMap
-	val Map<Pair<EObject,EStructuralFeature>, SettingDelta> settingDeltas = newHashMap	
-	val Map<Pair<EObject,EObject>, Boolean> matches = newHashMap
 	
 	/**
 	 * A special EcoreUtils.Copier that deals with references that have targets outside 
@@ -44,10 +40,8 @@ class Comparer {
 			val result = super.get(key)
 			if (result == null) {
 				// a reference is requested that was not copied
-				precondition[key instanceof EObject]
 				val revised = key as EObject
-				val original = equalizer.get(revised)
-				precondition[original != null]
+				val original = revised.matchingOrEqual
 				val delta = original.objectDelta
 				var proxy = delta.originalProxy
 				if (proxy == null) {
@@ -62,115 +56,29 @@ class Comparer {
 		}		
 	}
 	
-	static abstract class MyEqualityHelper extends EqualityHelper {
-		public abstract def boolean equals(EObject original, EObject revised, boolean isReferenceCompare);
-	}
-	
-	/**
-	 * A special EcoreUtils.EqualityHelper. It caches results, it tries to match if comparer
-	 * configuration requires it, uses regular equals else. Recursively compares matched
-	 * objects.
-	 */
-	val equalizer = new MyEqualityHelper {
-		private def boolean equalsContainment(EObject original, EObject revised) {
-			if (get(original) == revised) {
-				return true
-			}
-			
-			if (compareWithMatch(original, revised)) {
-				val pair = (original as EObject)->(revised as EObject)
-				val existingMatch = matches.get(pair)
-				if (existingMatch == null) {
-					val doMatch = match(original, revised) [o,r|equals(o,r)]						
-					matches.put(pair, doMatch)
-					if (doMatch) {
-						put(original, revised)
-						put(revised, original)
-						compareSettings(original, revised)
-					}
-					doMatch														
-				} else {						
-					existingMatch
-				}
+	val equalizer = new ContextualEqualityHelper() {		
+		override protected contextEquals(EObject original, EObject revised) {
+			if (rootOriginal == original) {
+				return matches.get(original) == revised
 			} else {
-				super.equals(original, revised)					
-			}		
-		}	
-
-		override equals(EObject original, EObject revised, boolean isContainmentCompare) {
-			if (isContainmentCompare) {
-				return equalsContainment(original, revised)							
-			} else {
-				if (get(original) == revised) {
-					return true
-				}
-				
-				if (compareWithMatch(original, revised)) {
-					val pair = (original as EObject)->(revised as EObject)
-					val existingMatch = matches.get(pair)
-					if (existingMatch != null) {
-						if (!existingMatch) {
-							return false
-						} else {
-							return true
-						}
-					} 
-				}		
-								
-				if (original.eContainmentFeature == revised.eContainmentFeature) {
-					val containmentFeature = original.eContainingFeature
-					val originalContainer = original.eContainer
-					val revisedContainer = revised.eContainer
-					
-					if (containmentFeature.many) {
-						val originalIndex = (original.eGet(containmentFeature) as List<EObject>).indexOf(original)
-						val revisedIndex = (revised.eGet(containmentFeature) as List<EObject>).indexOf(revised)
-						if (originalIndex != revisedIndex) {
-							return false
-						}
-					}
-					
-					if (equals(originalContainer, revisedContainer, false)) {
-						return equals(original, revised, true)
+				if (original.eContainer == null) {
+					if (revised.eContainer == null) {
+						return true // objects that are outside the context
 					} else {
 						return false
 					}
-				} else {
-					return false
+				} else {				
+					if (compareWithMatch(original.eContainer.eClass, original.eContainmentFeature)) {
+						return matches.get(original) == revised
+					} else {
+						return null
+					}					
 				}
-			}						
-		}
-		
-		override equals(EObject eObject1, EObject eObject2) {
-			return equals(eObject1, eObject2, true)
-		}
-		
-		override protected haveEqualReference(EObject eObject1, EObject eObject2, EReference reference) {
-			val value1 = eObject1.eGet(reference);
-      		val value2 = eObject2.eGet(reference);
-
-      		if (reference.many) 
-          		equals(value1 as List<EObject>, value2 as List<EObject>, reference)
-          	else
-          		equals(value1 as EObject, value2 as EObject, reference.containment)
-		}
-		
-		private def boolean equals(List<EObject> list1, List<EObject> list2, EReference reference) {
-			val size = list1.size();
-  			if (size != list2.size()) {
-  				false
-  			} else {
-		      	for (i:0..<size) {
-		      		if (!equals(list1.get(i), list2.get(i), reference.containment)) {
-		      			return false
-		      		}
-		      	}
-		      	true			      	
-		    }			
-		}
+			}
+		}		
 	}
-//	val List<Pair<ReferencedObjectsDelta, List<EObject>>> references = newArrayList
-	val List<Pair<EObject,Pair<EObject,EReference>>> referenceSettings = newArrayList
+
+	val List<Pair<ReferencedObjectsDelta, List<EObject>>> references = newArrayList
 	
 	new(ComparerConfiguration config, EmfCompressFactory factory) {
 		this.factory = factory
@@ -185,11 +93,8 @@ class Comparer {
 	private def void reset() {
 		equalizer.clear
 		copier.clear
-		objectDeltas.clear
-		settingDeltas.clear
 		matches.clear
-		referenceSettings.clear
-		rootDelta = factory.createObjectDelta
+		references.clear
 	}
 	
 	/**
@@ -198,21 +103,22 @@ class Comparer {
 	 */
 	public def ObjectDelta compare(EObject original, EObject revised) {
 		reset
+		model = new EmfCompressModel(factory, original)
 		
-		rootOriginal = original
-		rootDelta.originalClass = original.eClass
-		// First we recursively compare all settings of the given objects.
-		// This might create deltas with references. 		
-		equalizer.equals(original, revised, true)
+		// Add all matches recursively to the delta model
+		match(original, revised)
+		// Add all differences recursively to the delta model
+		diff(original, revised)
+				
 		// References to elements of the original model (created in the previous step)
 		// have been and are now added/replaced as/with ObjectDeltas and corresponding
 		// proxies.
 		handleReferences
 	
-		return rootDelta		
+		return model.rootDelta		
 	}
 	
-	val Map<EObject,EObject> matches2 = newHashMap
+	val Map<EObject,EObject> matches = newHashMap
 	
 	public def boolean match(EObject original, EObject revised) {
 		if (original.eClass != revised.eClass) {
@@ -220,10 +126,11 @@ class Comparer {
 		}
 		
 		return if (match(original, revised) [o,r|match(o,r)]) {
-			matches2.put(original,revised)
+			matches.put(original, revised)
+			matches.put(revised, original)
 			val eClass = original.eClass
-			val matchReferences = eClass.EAllReferences.filter[
-				containment && compareWithMatch(eClass, it)
+			val matchReferences = eClass.EAllReferences.filter[containment &&
+				changeable && !derived && !ignore && compareWithMatch(eClass, it) && !derivedFromOpposite 
 			]
 			for (matchReference:matchReferences) {
 				val List<EObject> originalValues = original.eGetList(matchReference)
@@ -247,61 +154,82 @@ class Comparer {
 		}
 	}
 	
+	public def void diff(EObject original, EObject revised) {
+		val eClass = original.eClass
+		val diffFeatures = eClass.EAllStructuralFeatures.filter[changeable && !derived && !ignore && !derivedFromOpposite]
+		for(diffFeature:diffFeatures) {
+			val isMatchFeature = if (diffFeature instanceof EReference) {
+				diffFeature.containment && compareWithMatch(eClass, diffFeature)
+			} else {
+				false
+			}
+			if (isMatchFeature) {
+				val List<EObject> orginalValues = original.eGetList(diffFeature)
+				for(originalValue:orginalValues) {
+					val matchingValue = matches.get(originalValue)
+					if (matchingValue != null) {
+						diff(originalValue, matchingValue)
+					}
+				}				
+			} else {	
+				val originalValues = original.eGetList(diffFeature)
+				val revisedValues = revised.eGetList(diffFeature)
+				val (Object,Object)=>boolean compare = switch (diffFeature) {
+					EAttribute: [comparedOriginal, comparedRevised| comparedOriginal == comparedRevised || (comparedOriginal != null && comparedOriginal.equals(comparedRevised))]
+					EReference: [comparedOriginal, comparedRevised|
+						matches.get(comparedOriginal) == comparedRevised ||
+						equalizer.compareObjects(comparedOriginal as EObject, comparedRevised as EObject, diffFeature.containment)
+					]
+				}
+				val patch = DiffUtils.diff(originalValues, revisedValues, compare)
+				if (!patch.deltas.empty) {
+					val settingDelta = settingDelta(original, diffFeature)
+					patch.deltas.forEach[
+						val replacedValues = switch diffFeature {
+							EAttribute: {
+								val replacedDataValues = factory.createDataValuesDelta
+								it.revised.lines.forEach[replacedDataValues.revisedValues += it]
+								replacedDataValues							
+							}
+							EReference: {
+								if (diffFeature.containment) {
+									val replacedObjectValues = factory.createContainedObjectsDelta
+									it.revised.lines.forEach[
+										replacedObjectValues.revisedObjectContainments += (it as EObject).containment
+									]
+									replacedObjectValues									
+								} else {
+									val replacedObjectValues = factory.createReferencedObjectsDelta
+									val referencedValues = newArrayList
+									it.revised.lines.forEach[
+										referencedValues.add(it as EObject)
+									]
+									references.add(replacedObjectValues->referencedValues)
+									replacedObjectValues
+								}
+							}
+							default: unreachable as ValuesDelta
+						}
+						
+						replacedValues.originalStart = it.original.position
+						replacedValues.originalEnd = it.original.position + it.original.size
+						settingDelta.valueDeltas += replacedValues				
+					]				
+				}				
+			}
+		}
+	}
+	
 	private def <T> List<T> eGetList(EObject container, EStructuralFeature feature) {
 		return if (feature.many) {
 			container.eGet(feature) as List<T>
 		} else {
-			#[container.eGet(feature) as T]	
+			val value = container.eGet(feature) as T
+			if (value == null) #[] else #[container.eGet(feature) as T]	
 		}
 	}
 	
 	private def void handleReferences() {
-		// handle references in references
-		val List<Pair<ReferencedObjectsDelta, List<EObject>>> references = newArrayList
-		for(refernceSetting:referenceSettings) {
-			val original = refernceSetting.key
-			val revised = refernceSetting.value.key
-			val feature = refernceSetting.value.value
-			
-			val List<ValuesDelta> valueDeltas = newArrayList
-			if (feature.many) {
-				val originalValues = original.eGet(feature) as List<EObject>
-					val revisedValues = revised.eGet(feature) as List<EObject>
-					val patch = DiffUtils.diff(originalValues, revisedValues) [comparedOriginal,comparedRevised|
-						compareValues(comparedOriginal, comparedRevised,feature) 
-					]
-					if (!patch.deltas.empty) {
-						patch.deltas.forEach[
-							val replacedObjectValues = factory.createReferencedObjectsDelta
-							replacedObjectValues.originalStart = it.original.position
-							replacedObjectValues.originalEnd = it.original.position + it.original.size
-							val referencedValues = newArrayList
-							it.revised.lines.forEach[
-								referencedValues.add(it as EObject)
-							]
-							references.add(replacedObjectValues->referencedValues)
-							
-							valueDeltas += replacedObjectValues
-						]					
-					}
-			} else {
-				val originalValue = original.eGet(feature) as EObject
-				val revisedValue = revised.eGet(feature) as EObject
-				if (!compareValues(originalValue, revisedValue, feature)) {
-					val replacedObjectValues = factory.createReferencedObjectsDelta
-					if (revisedValue != null) {
-						val referencedValues = newArrayList(revisedValue as EObject)									
-						references.add(replacedObjectValues->referencedValues)									
-					}
-					valueDeltas += replacedObjectValues
-				}
-			}
-			if (!valueDeltas.empty) {
-				val settingDelta = original.settingDelta(feature)					
-				settingDelta.valueDeltas += valueDeltas
-			}
-		}
-		
 		for(referenceDelta:references) {
 			val delta = referenceDelta.key
 			val values = referenceDelta.value
@@ -312,7 +240,7 @@ class Comparer {
 					newReference.revisedObject = copy
 					newReference
 				} else {
-					val equalOriginal = equalizer.get(value)
+					val equalOriginal = value.matchingOrEqual
 					if (equalOriginal != null) {
 						val newReference = factory.createOriginalObjectReference
 						newReference.originalObject = equalOriginal.objectDelta
@@ -330,64 +258,20 @@ class Comparer {
 		copier.copyReferences	
 	}
 	
-	/**
-	 * Transforms a given original and feature into a SettingDelta, if it
-	 * does not already exist. Used for lazy delta construction.	  
-	 */
-	private def SettingDelta settingDelta(EObject original, EStructuralFeature feature) {
-		val pair = original->feature
-		val existing = settingDeltas.get(pair) 
-		if (existing == null) {
-			val containerDelta = original.objectDelta
-			val featureID = original.eClass.getFeatureID(feature)			
-			val newSettingDelta = factory.createSettingDelta
-			newSettingDelta.featureID = featureID
-			containerDelta.settingDeltas.add(newSettingDelta)
-			settingDeltas.put(pair, newSettingDelta)
-			return newSettingDelta
+	private def EObject matchingOrEqual(EObject object) {
+		val matchingOriginal = matches.get(object)
+		if (matchingOriginal != null) {
+			matchingOriginal
 		} else {
-			return existing
-		}		
+			equalizer.get(object)							
+		}								
 	}
 	
-	/**
-	 * Transforms a given original into a ObjectDelta, if it
-	 * does not already exist. Used for lazy delta construction.	  
-	 */
-	private def ObjectDelta objectDelta(EObject original) {
-		if (original == rootOriginal) {
-			return rootDelta
-		}
-		
-		val container = original.eContainer
-		
-		val existingDelta = objectDeltas.get(original) 
-		if (existingDelta == null) {			
-			val newDelta = factory.createObjectDelta
-			newDelta.originalClass = original.eClass
-			objectDeltas.put(original, newDelta)
-			
-			val containmentFeature = original.eContainmentFeature
-			if (containmentFeature.many) {
-				newDelta.originalIndex = (container.eGet(original.eContainmentFeature) as List<Object>).indexOf(original)			
-			}
-			container.settingDelta(containmentFeature).matchedObjects.add(newDelta)
-			
-			return newDelta
-		} else {
-			return existingDelta
-		}
-	}
-	
-	/**
+   /**
 	 * For a pair of opposing references, only one should be used during comparison.
 	 * @returns true, if the given feature is already used during comparison.
 	 */
 	private def boolean derivedFromOpposite(EStructuralFeature feature) {
-		return derivedFromOpposite(feature, true)
-	}
-	
-	private def boolean derivedFromOpposite(EStructuralFeature feature, boolean check) {
 		switch(feature) {
 			EAttribute: return false
 			EReference: 
@@ -415,10 +299,6 @@ class Comparer {
 							}
 						}			
 						
-						if (check) {
-							precondition[result != derivedFromOpposite(opposite, false)]
-						}
-						
 						return result		
 					} else {
 						false
@@ -429,7 +309,7 @@ class Comparer {
 	}
 	
 	private def containment(EObject revisedObject) {
-		val matchingOriginalObject = equalizer.get(revisedObject)
+		val matchingOriginalObject = matches.get(revisedObject)
 		return if (matchingOriginalObject == null) {
 			val revisedContainment = factory.createRevisedObjectContainment
 			revisedContainment.revisedObject = copier.copy(revisedObject)
@@ -437,142 +317,11 @@ class Comparer {
 		} else {
 			val originalContainment = factory.createOriginalObjectContainment
 			originalContainment.originalObject = matchingOriginalObject.objectDelta
-			precondition[originalContainment.originalObject != null]
 			originalContainment
 		}
 	}
 	
-	/**
-	 * Compares the settings of the given objects. It lazily creates object deltas for the given original
-	 * and adds all found setting deltas to this original. Method is indirectly recursive as long as two
-	 * objects have not been compared already.
-	 */
-	private def void compareSettings(EObject original, EObject revised) {
-		precondition[original.eClass == revised.eClass]
-		val eClass = original.eClass	
-		for(feature:eClass.EAllStructuralFeatures) {
-			if (feature.changeable && !feature.derived && !feature.derivedFromOpposite && !feature.ignore) {
-				val List<ValuesDelta> valueDeltas = newArrayList		 				
-				if (feature.many) {
-					val originalValues = original.eGet(feature) as List<Object>
-					val revisedValues = revised.eGet(feature) as List<Object>
-					val patch = DiffUtils.diff(originalValues, revisedValues) [comparedOriginal,comparedRevised|
-						compareValues(comparedOriginal,comparedRevised,feature) 
-					]
-					if (!patch.deltas.empty) {
-						patch.deltas.forEach[
-							val replacedValues = switch feature {
-								EAttribute: {
-									val replacedDataValues = factory.createDataValuesDelta
-									it.revised.lines.forEach[replacedDataValues.revisedValues += it]
-									replacedDataValues							
-								}
-								EReference: {
-									if (feature.containment) {
-										val replacedObjectValues = factory.createContainedObjectsDelta
-										it.revised.lines.forEach[
-											replacedObjectValues.revisedObjectContainments += (it as EObject).containment
-										]
-										replacedObjectValues									
-									} else {
-										referenceSettings += original -> (revised -> feature)
-										null
-//										val replacedObjectValues = factory.createReferencedObjectsDelta
-//										val referencedValues = newArrayList
-//										it.revised.lines.forEach[
-//											referencedValues.add(it as EObject)
-//										]
-//										references.add(replacedObjectValues->referencedValues)
-//										replacedObjectValues
-									}
-								}
-								default: unreachable as ValuesDelta
-							}
-							if (replacedValues != null) {
-								replacedValues.originalStart = it.original.position
-								replacedValues.originalEnd = it.original.position + it.original.size
-								valueDeltas += replacedValues								
-							}
-						]				
-					}
-				} else {
-					val revisedValue = revised.eGet(feature)
-					if (!compareValues(original.eGet(feature), revisedValue, feature)) {
-						switch feature {
-							EAttribute: {
-								val replacedDataValues = factory.createDataValuesDelta
-								if (revisedValue != null) {
-									replacedDataValues.revisedValues += revisedValue
-								}
-								valueDeltas += replacedDataValues
-							}
-							EReference: {
-								if (feature.containment) {
-									val replacedObjectValues = factory.createContainedObjectsDelta
-									if (revisedValue != null) {										
-										replacedObjectValues.revisedObjectContainments += (revisedValue as EObject).containment
-									}
-									valueDeltas += replacedObjectValues
-								} else {
-									referenceSettings += original -> (revised -> feature)
-//									val replacedObjectValues = factory.createReferencedObjectsDelta
-//									if (revisedValue != null) {
-//										val referencedValues = newArrayList(revisedValue as EObject)									
-//										references.add(replacedObjectValues->referencedValues)									
-//									}
-//									replacedObjectValues
-								}
-							}
-							default: unreachable as ValuesDelta
-						}
-					}
-				}
-				
-				if (!valueDeltas.empty) {
-					val settingDelta = original.settingDelta(feature)					
-					settingDelta.valueDeltas += valueDeltas
-				}
-			}
-		}		
-	}
-	
-	/**
-	 * Compares the given object values (that belong to the given feature). 
-	 * @returns true, if the values are equal or match.
-	 */
-	private def boolean compareValues(Object original, Object revised, EStructuralFeature feature) {
-		return if (original == null || revised == null) {
-			original == revised
-		} else if (original == revised) {
-			true
-		} else {	
-			switch feature {
-				EAttribute: {
-					if (original.equals(revised)) {
-						true
-					} else {
-						false
-					}	
-				}
-				EReference: {
-					if (equalizer.get(original) != revised) {
-						return equalizer.equals(original as EObject, revised as EObject, feature.containment)
-					} else {
-						true
-					}					
-				}
-				default: unreachable as Boolean
-			}			
-		}
-	}
-	
-	private def Object unreachable() {
+	private def <T> T unreachable() {
 		throw new RuntimeException("Unreachable")
-	}
-	
-	private def precondition(()=>boolean condition) {
-		if (!condition.apply) {
-			throw new RuntimeException("Condition failed")
-		}
 	}
 }

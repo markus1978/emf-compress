@@ -1,6 +1,7 @@
 package de.hub.emfcompress.tests
 
 import de.hub.emfcompress.Comparer
+import de.hub.emfcompress.EmfCompressFactory
 import de.hub.emfcompress.EmfCompressPackage
 import de.hub.emfcompress.ObjectDelta
 import de.hub.emfcompress.Patcher
@@ -41,7 +42,7 @@ class AbstractTests {
 		val patched = EcoreUtil.copy(original)
 		
 		try {
-			new Patcher().patch(patched, delta)	
+			new Patcher(EmfCompressFactory.eINSTANCE).patch(patched, delta)	
 			assertEmfEquals(patched, revised)		
 		} catch (Throwable e) {
 			println(prettyPrint(delta))	
