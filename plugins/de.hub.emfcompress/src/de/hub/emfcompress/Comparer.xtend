@@ -1,14 +1,15 @@
 package de.hub.emfcompress
 
-import de.hub.emfcompress.internal.ContextualEqualityHelper
 import de.hub.emfcompress.internal.EmfCompressModel
 import difflib.DiffUtils
+import java.util.Collection
 import java.util.List
 import java.util.Map
 import org.eclipse.emf.ecore.EAttribute
 import org.eclipse.emf.ecore.EObject
 import org.eclipse.emf.ecore.EReference
 import org.eclipse.emf.ecore.EStructuralFeature
+import org.eclipse.emf.ecore.util.EcoreUtil
 import org.eclipse.emf.ecore.util.EcoreUtil.Copier
 
 /**
@@ -27,6 +28,9 @@ class Comparer {
 	val EmfCompressFactory factory
 	val extension ComparerConfiguration config 
 	
+	val Collection<EObject> noMatchesOrEquals = newHashSet
+	val Map<EObject, EObject> matchesAndEquals = newHashMap
+	
 	/**
 	 * A special EcoreUtils.Copier that deals with references that have targets outside 
 	 * the copied object's containment hierarchies.
@@ -41,7 +45,7 @@ class Comparer {
 			if (result == null) {
 				// a reference is requested that was not copied
 				val revised = key as EObject
-				val original = revised.matchingOrEqual
+				val original = matchesAndEquals.get(revised)
 				val delta = original.objectDelta
 				var proxy = delta.originalProxy
 				if (proxy == null) {
@@ -56,26 +60,37 @@ class Comparer {
 		}		
 	}
 	
-	val equalizer = new ContextualEqualityHelper() {		
-		override protected contextEquals(EObject original, EObject revised) {
-			if (rootOriginal == original) {
-				return matches.get(original) == revised
-			} else {
-				if (original.eContainer == null) {
-					if (revised.eContainer == null) {
-						return true // objects that are outside the context
-					} else {
-						return false
-					}
-				} else {				
-					if (compareWithMatch(original.eContainer.eClass, original.eContainmentFeature)) {
-						return matches.get(original) == revised
-					} else {
-						return null
-					}					
+	val equalityHelper = new EcoreUtil.EqualityHelper {
+		override protected haveEqualReference(EObject eObject1, EObject eObject2, EReference reference) {
+			val value1 = eObject1.eGet(reference);
+	  		val value2 = eObject2.eGet(reference);
+	
+			return if (reference.containment) {
+				if (reference.many) {
+					super.equals(value1 as List<EObject>, value2 as List<EObject>)
+				} else {
+					super.equals(value1 as EObject, value2 as EObject)
 				}
-			}
-		}		
+			} else {
+		  		if (reference.many) { 
+		  			val list1 = value1 as List<EObject>
+		  			val list2 = value2 as List<EObject>
+		      		val size = list1.size();
+					if (size != list2.size()) {
+						false
+					} else {
+				      	for (i:0..<size) {
+				      		if (!Comparer.this.equals(list1.get(i), list2.get(i))) {
+				      			return false
+				      		}
+				      	}
+				      	true
+				    }	
+		      	} else {
+		      		Comparer.this.equals(value1 as EObject, value2 as EObject)
+		      	}
+		      }
+		}
 	}
 
 	val List<Pair<ReferencedObjectsDelta, List<EObject>>> references = newArrayList
@@ -91,9 +106,9 @@ class Comparer {
 	}
 	
 	private def void reset() {
-		equalizer.clear
+		noMatchesOrEquals.clear
+		matchesAndEquals.clear
 		copier.clear
-		matches.clear
 		references.clear
 	}
 	
@@ -118,16 +133,14 @@ class Comparer {
 		return model.rootDelta		
 	}
 	
-	val Map<EObject,EObject> matches = newHashMap
-	
 	public def boolean match(EObject original, EObject revised) {
 		if (original.eClass != revised.eClass) {
 			return false	
 		}
 		
-		return if (match(original, revised) [o,r|match(o,r)]) {
-			matches.put(original, revised)
-			matches.put(revised, original)
+		val result = if (config.match(original, revised)) {
+			matchesAndEquals.put(original, revised)
+			matchesAndEquals.put(revised, original)	
 			val eClass = original.eClass
 			val matchReferences = eClass.EAllReferences.filter[containment &&
 				changeable && !derived && !ignore && compareWithMatch(eClass, it) && !derivedFromOpposite 
@@ -141,17 +154,20 @@ class Comparer {
 				patch.deltas.forEach[
 					val replacedObjectValues = factory.createContainedObjectsDelta
 					it.revised.lines.forEach[
-						replacedObjectValues.revisedObjectContainments += it.containment																		
+						replacedObjectValues.revisedObjectContainments += it.containment
 					]
 					replacedObjectValues.originalStart = it.original.position
 					replacedObjectValues.originalEnd = it.original.position + it.original.size
-					original.settingDelta(matchReference).valueDeltas += replacedObjectValues								
+					original.settingDelta(matchReference).valueDeltas += replacedObjectValues
 				]				
 			}	
 			true	
 		} else {
+			noMatchesOrEquals.add(original)
 			false
 		}
+		
+		result
 	}
 	
 	public def void diff(EObject original, EObject revised) {
@@ -166,7 +182,7 @@ class Comparer {
 			if (isMatchFeature) {
 				val List<EObject> orginalValues = original.eGetList(diffFeature)
 				for(originalValue:orginalValues) {
-					val matchingValue = matches.get(originalValue)
+					val matchingValue = matchesAndEquals.get(originalValue)
 					if (matchingValue != null) {
 						diff(originalValue, matchingValue)
 					}
@@ -177,8 +193,7 @@ class Comparer {
 				val (Object,Object)=>boolean compare = switch (diffFeature) {
 					EAttribute: [comparedOriginal, comparedRevised| comparedOriginal == comparedRevised || (comparedOriginal != null && comparedOriginal.equals(comparedRevised))]
 					EReference: [comparedOriginal, comparedRevised|
-						matches.get(comparedOriginal) == comparedRevised ||
-						equalizer.compareObjects(comparedOriginal as EObject, comparedRevised as EObject, diffFeature.containment)
+						equals(comparedOriginal as EObject, comparedRevised as EObject)
 					]
 				}
 				val patch = DiffUtils.diff(originalValues, revisedValues, compare)
@@ -240,7 +255,7 @@ class Comparer {
 					newReference.revisedObject = copy
 					newReference
 				} else {
-					val equalOriginal = value.matchingOrEqual
+					val equalOriginal = matchesAndEquals.get(value)
 					if (equalOriginal != null) {
 						val newReference = factory.createOriginalObjectReference
 						newReference.originalObject = equalOriginal.objectDelta
@@ -256,15 +271,6 @@ class Comparer {
 		// handle references in copier, the copier's specialized get 
 		// method will create proxies for non copied elements
 		copier.copyReferences	
-	}
-	
-	private def EObject matchingOrEqual(EObject object) {
-		val matchingOriginal = matches.get(object)
-		if (matchingOriginal != null) {
-			matchingOriginal
-		} else {
-			equalizer.get(object)							
-		}								
 	}
 	
    /**
@@ -309,7 +315,7 @@ class Comparer {
 	}
 	
 	private def containment(EObject revisedObject) {
-		val matchingOriginalObject = matches.get(revisedObject)
+		val matchingOriginalObject = matchesAndEquals.get(revisedObject)
 		return if (matchingOriginalObject == null) {
 			val revisedContainment = factory.createRevisedObjectContainment
 			revisedContainment.revisedObject = copier.copy(revisedObject)
@@ -319,6 +325,68 @@ class Comparer {
 			originalContainment.originalObject = matchingOriginalObject.objectDelta
 			originalContainment
 		}
+	}
+	
+	private def boolean equals(EObject original, EObject revised) {
+		switch compareBase(original, revised) {
+			case 1: return true
+			case -1: return false
+		}
+		
+		matchesAndEquals.put(original, revised)
+		val areEqual = haveEqualContext(original, revised) && haveEqualContents(original, revised)
+		if (!areEqual) {
+			noMatchesOrEquals += original
+			matchesAndEquals.remove(original)
+		} else {
+			matchesAndEquals.put(revised, original)
+		}
+		
+		return areEqual
+	}
+	
+	private def int compareBase(EObject original, EObject revised) {
+		if (original == null || revised == null) {
+			return if (original == revised) 1 else -1
+		} 
+		if (original.eClass != revised.eClass) {
+			return -1
+		} 
+		if (noMatchesOrEquals.contains(original)) {
+			return -1
+		} 
+					
+		val match = matchesAndEquals.get(original)
+		if (match != null) {
+			return if (match == revised) 1 else -1
+		}
+	
+		return 0
+	}
+	
+	private def boolean haveEqualContents(EObject original, EObject revised) {
+		equalityHelper.clear
+		return equalityHelper.equals(original, revised)
+	}
+	
+	private def boolean haveEqualContext(EObject original, EObject revised) {
+		if (original.eContainmentFeature == revised.eContainmentFeature) {
+			val containmentFeature = original.eContainingFeature
+			val originalContainer = original.eContainer
+			val revisedContainer = revised.eContainer
+			
+			if (containmentFeature.many) {
+				val originalIndex = (originalContainer.eGet(containmentFeature) as List<EObject>).indexOf(original)
+				val revisedIndex = (revisedContainer.eGet(containmentFeature) as List<EObject>).indexOf(revised)
+				if (originalIndex != revisedIndex) {
+					return false
+				}
+			}
+			
+			return equals(originalContainer, revisedContainer)				
+		} else {
+			return false
+		}	
 	}
 	
 	private def <T> T unreachable() {

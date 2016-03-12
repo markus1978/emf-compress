@@ -26,5 +26,5 @@ interface ComparerConfiguration {
 	 * matches.
 	 * @returns true, if the given objects match.
 	 */
-	def boolean match(EObject original, EObject revised, (EObject,EObject)=>boolean match) 
+	def boolean match(EObject original, EObject revised) 
 }

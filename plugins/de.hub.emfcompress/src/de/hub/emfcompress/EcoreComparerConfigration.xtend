@@ -23,7 +23,7 @@ class EcoreComparerConfigration implements ComparerConfiguration {
 		return false
 	}
 	
-	override boolean match(EObject original,EObject revised, (EObject,EObject)=>boolean match) {
+	override boolean match(EObject original,EObject revised) {
 		val nameFeature = EcorePackage.eINSTANCE.ENamedElement_Name
 		return original.eGet(nameFeature) == revised.eGet(nameFeature)
 	}
