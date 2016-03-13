@@ -30,7 +30,7 @@ left containment hierarchies, i.e. the compression potential is low compared to 
 
 # What about EMF-Compare and others?
 
-Other framework use a similar strategy to compare models, but follow different goals.
+Other frameworks use a similar strategy to compare models, but follow different goals.
 [EMF-Compare](https://www.eclipse.org/emf/compare/) and other model compare/diff frameworks are tailored to show matches and 
 differences in individual models to humans. In this scenario, runtime performance is of minor 
 importance and is trumped by the quality of the compare. The used algorithms try to identify the 
@@ -57,10 +57,10 @@ Furthermore, the delta-model is not symmetrical. It treats the compared original
 models differently. The delta-model represents changes to the original model. All changes to an original
 model element are represented within an instance of **ObjectDelta**. **SettingDelta** and **ValuesDelta** instances are
 used to represent changes to respective features and value-sets (aka settings). Feature values are generalized as
-lists and deltas to these list (**ValuesDelta**) are represented by replacing values in the original list (refered to by indices in the original list) with 
+lists and deltas to these lists (**ValuesDelta**) are represented by replacing values in the original list (refered to by indices in the original list) with 
 values of the revised list (refered to by reference). 
 
-Revised values are references different depending on their nature (data values, cross references model elements, or contained model elements).
+Revised values are referenced differently depending on their nature (data values, cross references, or contained model elements).
 Revised values are part of the delta-model. These are either copies from the actual revised model, or they are references to the
 matching elements from the original model which are represented by **ObjectDelta** instances in the delta-model.
 
