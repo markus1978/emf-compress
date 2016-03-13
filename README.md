@@ -62,13 +62,13 @@ values of the revised list (refered to by reference).
 
 Revised values are references different depending on their nature (data values, cross references model elements, or contained model elements).
 Revised values are part of the delta-model. These are either copies from the actual revised model, or they are references to the
-matching elements from the original model which are represented by **ObjectDetla** instances in the delta-model.
+matching elements from the original model which are represented by **ObjectDelta** instances in the delta-model.
 
 **ObjectDeltas** can contain other **ObjectDeltas** to form hierarchies of deltas. Each **ObjectDelta** represents
 a changed element from the original model. If the contents of an original model elements matches contents
 of its matching revised model element, this match and all changes to the matched elements are also represented by an
 **ObjectDelta**. The **ObjectDeltas** that represent matching values with respect to a certain feature of
-the containing element are contained in the **SettingDetla** that represents this feature of the containing model element delta.
+the containing element are contained in the **SettingDelta** that represents this feature of the containing model element delta.
 To identify an **ObjectDelta** within the list of values in a setting the index of the original element within that setting is used.
 
 # Patching
