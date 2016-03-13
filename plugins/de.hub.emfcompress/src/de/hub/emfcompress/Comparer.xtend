@@ -60,6 +60,12 @@ class Comparer {
 		}		
 	}
 	
+	/**
+	 * A special EcoreUtil.EqualityHelper that refers the comparison of cross references
+	 * back to the comparer. This is necessary, because the original EqualityHelper 
+	 * implementation only works for references that keep within the compared objects 
+	 * containment hierarchies.
+	 */
 	val equalityHelper = new EcoreUtil.EqualityHelper {
 		override protected haveEqualReference(EObject eObject1, EObject eObject2, EReference reference) {
 			val value1 = eObject1.eGet(reference);
@@ -72,24 +78,24 @@ class Comparer {
 					super.equals(value1 as EObject, value2 as EObject)
 				}
 			} else {
-		  		if (reference.many) { 
-		  			val list1 = value1 as List<EObject>
-		  			val list2 = value2 as List<EObject>
-		      		val size = list1.size();
+		  		if (reference.many) {
+					val list1 = value1 as List<EObject>
+					val list2 = value2 as List<EObject>
+					val size = list1.size();
 					if (size != list2.size()) {
 						false
 					} else {
-				      	for (i:0..<size) {
-				      		if (!Comparer.this.equals(list1.get(i), list2.get(i))) {
-				      			return false
-				      		}
-				      	}
-				      	true
-				    }	
-		      	} else {
-		      		Comparer.this.equals(value1 as EObject, value2 as EObject)
-		      	}
-		      }
+						for (i : 0 ..< size) {
+							if (!Comparer.this.equals(list1.get(i), list2.get(i))) {
+								return false
+							}
+						}
+						true
+					}
+				} else {
+					Comparer.this.equals(value1 as EObject, value2 as EObject)
+				}
+			}
 		}
 	}
 
