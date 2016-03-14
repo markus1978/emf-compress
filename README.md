@@ -44,7 +44,7 @@ to configure the depth until matching is used and before elements are just compa
 Therefore, EMF-Compress identifies a *small editing distance*, but not necessarily the smallest and
 thus yields both reasonable compression and reasonable runtime performance.
 
-# The match-delta model
+# The match/delta-model
 
 While other frameworks strictly separate matching and finding differences; represent matches
 and differences in separate models, EMF-compress does both in one step and represents both in 
