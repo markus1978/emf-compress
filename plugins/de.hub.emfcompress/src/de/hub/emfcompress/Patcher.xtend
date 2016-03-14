@@ -27,6 +27,10 @@ class Patcher {
 		trash = factory.createTrash
 	}
 	
+	new() {
+		this(EmfCompressFactory.eINSTANCE)
+	}
+	
 	/**
 	 * A special EcoreUtils.Copier that replaces object delta proxies with the patched originals they represent.
 	 */	

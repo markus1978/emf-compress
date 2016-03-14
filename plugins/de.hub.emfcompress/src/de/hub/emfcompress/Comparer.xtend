@@ -371,8 +371,12 @@ class Comparer {
 	}
 	
 	private def boolean haveEqualContents(EObject original, EObject revised) {
-		equalityHelper.clear
-		return equalityHelper.equals(original, revised)
+		equalityHelper.clear		
+		val result = equalityHelper.equals(original, revised)
+		if (result) {
+			matchesAndEquals.putAll(equalityHelper)
+		}
+		return result
 	}
 	
 	private def boolean haveEqualContext(EObject original, EObject revised) {
