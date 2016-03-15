@@ -98,11 +98,29 @@ class Patcher {
 		resource.contents += original
 		resource.contents += trash
 		
-		for(contents:trash.contents.iterator.toList) {
-			EcoreUtil.delete(contents, true)
-		}
+		trash.contents.forEach[delete]
+//		for(contents:trash.contents.iterator.toList) {
+//			EcoreUtil.delete(contents, true)
+//		}
 		
 		resource.contents.clear
+	}
+	
+	private def void delete(EObject eObject) {
+		if (eObject != null) {
+			for(reference:eObject.eClass.EAllReferences.filter[
+				!derived && changeable && (EOpposite == null || !EOpposite.containment)
+			]) {
+				if (reference.containment) {
+					if (reference.many) {
+						(eObject.eGet(reference) as List<EObject>).forEach[delete]
+					} else {
+						(eObject.eGet(reference) as EObject).delete
+					}
+				}
+				eObject.eUnset(reference)
+			}			
+		}
 	}
 	
 	/**

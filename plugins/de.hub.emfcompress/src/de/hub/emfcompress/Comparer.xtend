@@ -22,7 +22,7 @@ import org.eclipse.emf.ecore.util.EcoreUtil.Copier
  * Comparer can be configured through the protected callback methods.
  */
 class Comparer {
-	
+
 	var extension EmfCompressModel model = null
 	
 	val EmfCompressFactory factory
@@ -46,6 +46,20 @@ class Comparer {
 				// a reference is requested that was not copied
 				val revised = key as EObject
 				val original = matchesAndEquals.get(revised)
+				if (original == null) {
+					// this is not supposed to happen
+					var c = revised
+					while (c != null) {
+						val cf = c.eContainmentFeature
+						val cc = c.eContainer
+						println('''«cf.name»->«cc»''')
+						c = cc
+						if (matchesAndEquals.get(c) != null) {
+							println('''FFFFFF''')
+							c = null
+						}
+					}
+				}
 				val delta = original.objectDelta
 				var proxy = delta.originalProxy
 				if (proxy == null) {
@@ -57,7 +71,7 @@ class Comparer {
 			} else {
 				return result
 			}
-		}		
+		}	
 	}
 	
 	/**
@@ -66,7 +80,14 @@ class Comparer {
 	 * implementation only works for references that keep within the compared objects 
 	 * containment hierarchies.
 	 */
-	val equalityHelper = new EcoreUtil.EqualityHelper {
+	private static class EqualityHelper extends EcoreUtil.EqualityHelper {
+		
+		val Comparer comparerSelf 
+		
+		new(Comparer comparerSelf) {
+			this.comparerSelf = comparerSelf
+		}
+
 		override protected haveEqualReference(EObject eObject1, EObject eObject2, EReference reference) {
 			val value1 = eObject1.eGet(reference);
 	  		val value2 = eObject2.eGet(reference);
@@ -86,14 +107,14 @@ class Comparer {
 						false
 					} else {
 						for (i : 0 ..< size) {
-							if (!Comparer.this.equals(list1.get(i), list2.get(i))) {
+							if (!comparerSelf.equals(list1.get(i), list2.get(i))) {
 								return false
 							}
 						}
 						true
 					}
 				} else {
-					Comparer.this.equals(value1 as EObject, value2 as EObject)
+					comparerSelf.equals(value1 as EObject, value2 as EObject)
 				}
 			}
 		}
@@ -333,12 +354,12 @@ class Comparer {
 		}
 	}
 	
-	private def boolean equals(EObject original, EObject revised) {
+	private def boolean equals(EObject original, EObject revised) {				
 		switch compareBase(original, revised) {
 			case 1: return true
 			case -1: return false
-		}
-		
+		}		
+	
 		matchesAndEquals.put(original, revised)
 		val areEqual = haveEqualContext(original, revised) && haveEqualContents(original, revised)
 		if (!areEqual) {
@@ -362,19 +383,24 @@ class Comparer {
 			return -1
 		} 
 					
-		val match = matchesAndEquals.get(original)
-		if (match != null) {
-			return if (match == revised) 1 else -1
+		val originalMatch = matchesAndEquals.get(original)
+		if (originalMatch != null) {
+			return if (originalMatch == revised) 1 else -1
+		} else {
+			val revisedMatch = matchesAndEquals.get(revised)
+			if (revisedMatch != null) {
+				return -1
+			}
 		}
 	
 		return 0
 	}
 	
 	private def boolean haveEqualContents(EObject original, EObject revised) {
-		equalityHelper.clear		
+		val equalityHelper = new EqualityHelper(this)		
 		val result = equalityHelper.equals(original, revised)
 		if (result) {
-			matchesAndEquals.putAll(equalityHelper)
+			matchesAndEquals.putAll(equalityHelper)			
 		}
 		return result
 	}
@@ -401,5 +427,9 @@ class Comparer {
 	
 	private def <T> T unreachable() {
 		throw new RuntimeException("Unreachable")
+	}
+	
+	public def int size() {
+		matchesAndEquals.size / 2
 	}
 }
