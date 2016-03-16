@@ -48,17 +48,17 @@ class Comparer {
 				val original = matchesAndEquals.get(revised)
 				if (original == null) {
 					// this is not supposed to happen
-					var c = revised
-					while (c != null) {
-						val cf = c.eContainmentFeature
-						val cc = c.eContainer
-						println('''«cf.name»->«cc»''')
-						c = cc
-						if (matchesAndEquals.get(c) != null) {
-							println('''FFFFFF''')
-							c = null
-						}
-					}
+//					var c = revised
+//					while (c != null) {
+//						val cf = c.eContainmentFeature
+//						val cc = c.eContainer
+//						println('''«cf.name»->«cc»''')
+//						c = cc
+//						if (matchesAndEquals.get(c) != null) {
+//							println('''FFFFFF''')
+//							c = null
+//						}
+//					}
 				}
 				val delta = original.objectDelta
 				var proxy = delta.originalProxy
